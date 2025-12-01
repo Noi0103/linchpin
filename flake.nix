@@ -27,13 +27,14 @@
     in
     {
       overlays.default = final: prev: {
-        reproducibility-automation = final.callPackage ./reproducibility-automation.nix { };
+        linchpin = final.callPackage ./linchpin.nix { };
         getclosure = final.writeShellScriptBin "getclosure" (builtins.readFile ./getclosure.sh);
       };
-      packages = forAllSystems (system: {
-        inherit (nixpkgsFor.${system}) reproducibility-automation getclosure;
 
-        default = self.packages.${system}.reproducibility-automation;
+      packages = forAllSystems (system: {
+        inherit (nixpkgsFor.${system}) linchpin getclosure;
+
+        default = self.packages.${system}.linchpin;
 
         stable = pkgs.runCommand "stable" { } "echo 5432 > $out";
         unstable = pkgs.runCommand "unstable" { } "echo $RANDOM > $out";
@@ -51,8 +52,8 @@
         };
       });
 
-      nixosModules.default = self.nixosModules.reproducibility-automation;
-      nixosModules.reproducibility-automation = ./module.nix;
+      nixosModules.default = self.nixosModules.linchpin;
+      nixosModules.linchpin = ./module.nix;
 
       devShells.${system}.default = pkgs.mkShell {
         inherit (self.checks.${system}.pre-commit-check) shellHook;
@@ -92,11 +93,9 @@
 
       checks = forAllSystems (
         system: with nixpkgsFor.${system}; {
-          inherit (self.packages.${system}) reproducibility-automation getclosure;
+          inherit (self.packages.${system}) linchpin getclosure;
 
           # interactive:
-          # nix build .\#checks.x86_64-linux.vmTest.driverInteractive && result/bin/nixos-test-driver
-          # >>>start_all()
           # ssh -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" root@localhost -p 2000
           vmTest = pkgs.testers.runNixOSTest {
             name = "report-stable";
@@ -126,8 +125,8 @@
                   virtualisation.graphics = false;
 
                   # package module
-                  imports = [ self.nixosModules.reproducibility-automation ];
-                  services.reproducibility-automation = {
+                  imports = [ self.nixosModules.linchpin ];
+                  services.linchpin = {
                     enable = true;
                     openFirewall = true;
                     socket-ip = "0.0.0.0";
@@ -186,8 +185,8 @@
                 server.wait_for_unit("multi-user.target")
                 client.wait_for_unit("multi-user.target")
 
-                server.succeed("cp /etc/stable.db /var/lib/reproducibility-automation/server.db")
-                server.wait_for_unit("reproducibility-automation.service")
+                server.succeed("cp /etc/stable.db /var/lib/linchpin/server.db")
+                server.wait_for_unit("linchpin.service")
                 server.wait_for_open_port(80)
 
                 server.succeed("curl --silent http://127.0.0.1/metrics")
@@ -196,7 +195,7 @@
                 response = client.succeed("curl --fail --silent --verbose http://server/ping")
                 assert "reports in waitlist:" in response
                 response = client.succeed("curl --fail --silent --verbose http://server/metrics")
-                assert "# HELP reproducibility_automation_axum_requests Count of requests." in response
+                assert "# HELP linchpin_axum_requests Count of requests." in response
 
                 client.succeed('curl -s -X POST -F "json=@/etc/closure-paths.json" -F "closure=@/etc/nix-export" "http://server/report"')
                 client.wait_until_succeeds("curl --silent http://server/ping | grep -q 'reports in waitlist: 0'")

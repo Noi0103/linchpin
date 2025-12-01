@@ -11,7 +11,7 @@ get_unknown_deriver() {
   local outPath="$1";
   nix derivation show "$outPath" |
   jq 'with_entries(. as {key:$k, value:$v} | {value: $k, key: ($ARGS.positional[] | select(startswith($k, $v.outputs[].path)))})' --args "$outPath"
-}  
+}
 
 # check if required environment variables are present
 required_vars=(
@@ -36,7 +36,7 @@ done
 # manually give a store derivation as $2 to use instead of symlink from result
 if [ -n "$2" ]; then
     # ref https://github.com/NixOS/nix/issues/7562
-    # used for testing purposes    
+    # used for testing purposes
     store_derivation=$2
     echo "derivation (arg): $store_derivation"
 else
@@ -88,8 +88,8 @@ response=$(curl -s -X POST \
 -F "closure=@$filepath" \
 "http://$1/report")
 
-rm "$filepath"
-rm "$jsonfile"
+#rm "$filepath"
+#rm "$jsonfile"
 
 if [[ "$response" == "" ]]; then
     echo "no server response"

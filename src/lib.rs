@@ -60,16 +60,16 @@ pub struct Args {
     #[arg(long, default_value_t = 1)]
     pub simultaneous_builds: usize,
     /// the location where symlinks will be placed to protect needed derivation files from automatic garbage collection
-    #[arg(long, default_value = PathBuf::from("/var/lib/reproducibility-automation/gc-roots").into_os_string())]
+    #[arg(long, default_value = PathBuf::from("/var/lib/linchpin/gc-roots").into_os_string())]
     pub gc_links_path: PathBuf,
     /// load and continue reports that were not finished after restarting the program
     #[arg(long, default_value_t = false)]
     pub persistent_reports: bool,
     /// filepath for saving unfinished reports
-    #[arg(long, default_value = PathBuf::from("/var/lib/reproducibility-automation/savefile.json").into_os_string())]
+    #[arg(long, default_value = PathBuf::from("/var/lib/linchpin/savefile.json").into_os_string())]
     pub savefile_path: PathBuf,
     /// filepath for saving unfinished reports
-    #[arg(long, default_value = PathBuf::from("/var/lib/reproducibility-automation/comment-history.json").into_os_string())]
+    #[arg(long, default_value = PathBuf::from("/var/lib/linchpin/comment-history.json").into_os_string())]
     pub savefile_history_path: PathBuf,
     /// how often given the chance a rebuild should be done until it will be skipped
     /// when skipped the database entry is used at face value
@@ -118,7 +118,7 @@ pub async fn server(
     {
         let mut registry = app_state.registry.lock().expect("registering metrics");
         registry.register(
-            "reproducibility_automation_axum_requests",
+            "linchpin_axum_requests",
             "Count of requests",
             app_state
                 .metrics
@@ -128,7 +128,7 @@ pub async fn server(
                 .clone(),
         );
         registry.register(
-            "reproducibility_automation_report_waitlist_len",
+            "linchpin_report_waitlist_len",
             "Number of reports waiting to be tested",
             app_state
                 .metrics
@@ -138,7 +138,7 @@ pub async fn server(
                 .clone(),
         );
         registry.register(
-            "reproducibility_automation_comment_history_len",
+            "linchpin_comment_history_len",
             "Number of comments that were posted and are still stored locally for edits",
             app_state
                 .metrics
@@ -148,7 +148,7 @@ pub async fn server(
                 .clone(),
         );
         registry.register(
-            "reproducibility_automation_active_gc_roots",
+            "linchpin_active_gc_roots",
             "Number of symlinks that protect toplevel derivation files from garbadge collection",
             app_state
                 .metrics
@@ -158,7 +158,7 @@ pub async fn server(
                 .clone(),
         );
         registry.register(
-            "reproducibility_automation_number_of_pipeline_ids",
+            "linchpin_number_of_pipeline_ids",
             "Number of different pipeline ids in the waitlist; how many different pipeline ordered a report",
             app_state
                 .metrics
@@ -168,7 +168,7 @@ pub async fn server(
                 .clone(),
         );
         registry.register(
-            "reproducibility_automation_tokio_workers_count",
+            "linchpin_tokio_workers_count",
             "value of tokio_metrics::RuntimeMetric.workers_count",
             app_state
                 .metrics
@@ -178,7 +178,7 @@ pub async fn server(
                 .clone(),
         );
         registry.register(
-            "reproducibility_automation_tokio_total_park_count",
+            "linchpin_tokio_total_park_count",
             "value of tokio_metrics::RuntimeMetric.total_park_count",
             app_state
                 .metrics

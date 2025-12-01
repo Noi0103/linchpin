@@ -108,7 +108,7 @@
         {
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "reproducibility_automation_axum_requests_total",
+          "expr": "linchpin_axum_requests_total",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -208,7 +208,7 @@
         {
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "reproducibility_automation_report_waitlist_len",
+          "expr": "linchpin_report_waitlist_len",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -308,7 +308,7 @@
         {
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "reproducibility_automation_number_of_pipeline_ids",
+          "expr": "linchpin_number_of_pipeline_ids",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -412,7 +412,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "reproducibility_automation_comment_history_len",
+          "expr": "linchpin_comment_history_len",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -515,7 +515,7 @@
         {
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "reproducibility_automation_active_gc_roots",
+          "expr": "linchpin_active_gc_roots",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -614,7 +614,7 @@
         {
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "reproducibility_automation_tokio_total_park_count",
+          "expr": "linchpin_tokio_total_park_count",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -710,7 +710,7 @@
         {
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "reproducibility_automation_tokio_workers_count",
+          "expr": "linchpin_tokio_workers_count",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -735,7 +735,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "reproducibility-automation",
+  "title": "linchpin",
   "uid": "0d4baef8-c4a2-4939-b0e0-865fabf7a3e3",
   "version": 23
 }

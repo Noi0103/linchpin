@@ -7,8 +7,8 @@ use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
 
 use gitlab::Gitlab;
-use reproducibility_automation::http_api::Metrics;
-use reproducibility_automation::*;
+use linchpin::http_api::Metrics;
+use linchpin::*;
 
 /// spawn two tokio tasks and continue to send keep-alive messages through sd_notify and systemd (watchdog)
 #[cfg(target_has_atomic = "ptr")]
@@ -63,13 +63,13 @@ async fn main() {
     tokio::spawn(tokio_metrics(runtime_monitor, shared_metrics.clone()));
 
     // two tokio tasks share the main workload between webserver and actual building and rebuilding
-    let task_server = tokio::task::spawn(reproducibility_automation::server(
+    let task_server = tokio::task::spawn(linchpin::server(
         database.clone(),
         shared_reports_list.clone(),
         shared_metrics.clone(),
         args.clone(),
     ));
-    let task_rebuilder = tokio::task::spawn(reproducibility_automation::rebuilder(
+    let task_rebuilder = tokio::task::spawn(linchpin::rebuilder(
         database,
         gitlab,
         shared_reports_list.clone(),

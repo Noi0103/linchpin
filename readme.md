@@ -36,15 +36,15 @@ Singular machine setup example:
         modules = [
           ./configuration.nix
 
-          linchpin.nixosModules.reproducibility-automation
+          linchpin.nixosModules.linchpin
           {
             environment.systemPackages =
               [ inputs.linchpin.outputs.packages.x86_64-linux.getclosure ];
 
-            services.reproducibility-automation = {
+            services.linchpin = {
               enable = true;
               openFirewall = false;
-              db-file = "/var/lib/reproducibility-automation/server.db";
+              db-file = "/var/lib/linchpin/server.db";
               socket-ip = "0.0.0.0";
               port = 8080;
               gitlab-url = "https://git.domain.com";

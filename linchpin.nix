@@ -3,8 +3,8 @@
 }:
 let
   self = pkgs.rustPlatform.buildRustPackage {
-    pname = "reproducibility-automation";
-    meta.mainProgram = "reproducibility-automation";
+    pname = "linchpin";
+    meta.mainProgram = "linchpin";
     version = "1.0";
     src = pkgs.lib.sourceFilesBySuffices ./. [
       ".rs"

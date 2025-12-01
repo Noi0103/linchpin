@@ -6,7 +6,7 @@
 }:
 {
   options = {
-    services.reproducibility-automation = {
+    services.linchpin = {
       enable = lib.mkEnableOption "enable tracking server";
 
       openFirewall = lib.mkEnableOption "open port in firewall";
@@ -28,29 +28,29 @@
 
       dataDir = lib.mkOption {
         type = lib.types.path;
-        default = "/var/lib/reproducibility-automation";
+        default = "/var/lib/linchpin";
         description = ''
           Parent Directory to derive other filesystem related options. You probably only need to edit this path if any at all.
         '';
       };
       db-file = lib.mkOption {
         type = lib.types.path;
-        default = "${config.services.reproducibility-automation.dataDir}/server.db";
+        default = "${config.services.linchpin.dataDir}/server.db";
         description = ''
           Filesystem path for a sqlite database storing a store derivations build reproducibility status.
         '';
       };
       savefile-path = lib.mkOption {
         type = lib.types.path;
-        default = "${config.services.reproducibility-automation.dataDir}/savefile.json";
+        default = "${config.services.linchpin.dataDir}/savefile.json";
         description = ''
           Filesystem path to store reports from the waitlist/queue. If persistent-reports option is set the content will be used to resume after restarting the service.
         '';
       };
       gc-links-path = lib.mkOption {
         type = lib.types.path;
-        default = "${config.services.reproducibility-automation.dataDir}/gc-roots";
-        example = "/var/lib/reproducibility-automation/gc-roots";
+        default = "${config.services.linchpin.dataDir}/gc-roots";
+        example = "/var/lib/linchpin/gc-roots";
         description = ''
           Filesystem path to a directory to create symlinks against store derivations. Protects needed store derivations against automated garbadge collection.
           Symlinks are removed upon test completion.
@@ -58,7 +58,7 @@
       };
       savefile-history-path = lib.mkOption {
         type = lib.types.path;
-        default = "${config.services.reproducibility-automation.dataDir}/comment-history.json";
+        default = "${config.services.linchpin.dataDir}/comment-history.json";
         description = ''
           Filesystem path to store specifics from already posted reports. In case a singular pipeline has multiple reports requested the incomplete comments will be edited to prevent creating additional comments.
         '';
@@ -111,8 +111,8 @@
       };
     };
   };
-  config = lib.mkIf config.services.reproducibility-automation.enable {
-    systemd.services.reproducibility-automation = {
+  config = lib.mkIf config.services.linchpin.enable {
+    systemd.services.linchpin = {
       enable = true;
       description = "server side for tracking already rebuilt derivations";
       path = [
@@ -122,18 +122,18 @@
       serviceConfig = {
         Type = "exec";
         ExecStart = "${
-          pkgs.callPackage ./reproducibility-automation.nix { }
-        }/bin/reproducibility-automation --db-file ${config.services.reproducibility-automation.db-file} --socket-address ${config.services.reproducibility-automation.socket-ip}:${builtins.toString config.services.reproducibility-automation.port} --nix-store ${config.services.reproducibility-automation.nix-store} --gitlab-url ${config.services.reproducibility-automation.gitlab-url} --simultaneous-builds ${builtins.toString config.services.reproducibility-automation.simultaneous-builds} --gc-links-path ${config.services.reproducibility-automation.gc-links-path} ${lib.optionalString config.services.reproducibility-automation.persistent-reports "--persistent-reports"} --savefile-path ${config.services.reproducibility-automation.savefile-path} --savefile-history-path ${config.services.reproducibility-automation.savefile-history-path} --max-rebuild-tries ${builtins.toString config.services.reproducibility-automation.max-rebuild-tries}";
+          pkgs.callPackage ./linchpin.nix { }
+        }/bin/linchpin --db-file ${config.services.linchpin.db-file} --socket-address ${config.services.linchpin.socket-ip}:${builtins.toString config.services.linchpin.port} --nix-store ${config.services.linchpin.nix-store} --gitlab-url ${config.services.linchpin.gitlab-url} --simultaneous-builds ${builtins.toString config.services.linchpin.simultaneous-builds} --gc-links-path ${config.services.linchpin.gc-links-path} ${lib.optionalString config.services.linchpin.persistent-reports "--persistent-reports"} --savefile-path ${config.services.linchpin.savefile-path} --savefile-history-path ${config.services.linchpin.savefile-history-path} --max-rebuild-tries ${builtins.toString config.services.linchpin.max-rebuild-tries}";
         WatchdogSec = "1min";
         Restart = "always";
         RestartSec = 20;
-        LoadCredential = [ "gitlab_token:${config.services.reproducibility-automation.gitlab-token-file}" ];
+        LoadCredential = [ "gitlab_token:${config.services.linchpin.gitlab-token-file}" ];
       };
       wantedBy = [ "multi-user.target" ];
     };
 
-    networking.firewall.allowedTCPPorts =
-      lib.mkIf config.services.reproducibility-automation.openFirewall
-        [ config.services.reproducibility-automation.port ];
+    networking.firewall.allowedTCPPorts = lib.mkIf config.services.linchpin.openFirewall [
+      config.services.linchpin.port
+    ];
   };
 }
