@@ -1,0 +1,39 @@
+# Only run on merge requests, tags, or the main branch
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+stages:
+  - check
+  - build
+
+variables:
+  GIT_URL: "git@${CI_SERVER_HOST}:"
+  GIT_SSH_URL: "ssh://git@${CI_SERVER_HOST}/"
+  HTTPS_URL: "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/"
+  FORCE_COLOR: 1
+  TERM: "ansi"
+
+default:
+  tags:
+    - conrad
+  before_script:
+    - git config --global --add url."$HTTPS_URL".insteadOf "$GIT_URL"
+    - git config --global --add url."$HTTPS_URL".insteadOf "$GIT_SSH_URL"
+
+check:
+  stage: check
+  script:
+      - nix flake check
+
+build:
+  stage: build
+  script:
+    - nix --print-build-logs build .#stable
+    - nix run .#getclosure 127.0.0.1:8080
+    - nix --print-build-logs build .#unstable
+    - nix run .#getclosure 127.0.0.1:8080
+    - nix --print-build-logs build .#default
+    - nix run .#getclosure 127.0.0.1:8080

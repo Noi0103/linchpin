@@ -1,0 +1,14 @@
+/target
+.envrc
+.direnv/
+result*
+*.env
+*.log
+*.db
+*_token
+*.png
+*.dot
++.svg
+tmp_*
+/.pre-commit-config.yaml
+.nixos-test-history
