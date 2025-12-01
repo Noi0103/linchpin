@@ -8,6 +8,7 @@ A service to rebuild every element of a Nix build closures sent to it and report
     - [example 1](#example-1)
     - [example 2](#example-2)
 - [tips and notes](#tips-and-notes)
+- [why linchpin](#why-linchpin)
 
 
 # usage example configuration
@@ -19,13 +20,13 @@ Singular machine setup example:
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
 
-    reproducibility-automation.url = "github:Noi0103/reproducibility-checker.git";
+    linchpin.url = "github:Noi0103/linchpin.git";
   };
 
   outputs = {
     self,
     nixpkgs,
-    reproducibility-automation,
+    linchpin,
     ...
   }@inputs:
   {
@@ -35,10 +36,10 @@ Singular machine setup example:
         modules = [
           ./configuration.nix
 
-          reproducibility-automation.nixosModules.reproducibility-automation
+          linchpin.nixosModules.reproducibility-automation
           {
             environment.systemPackages =
-              [ inputs.reproducibility-automation.outputs.packages.x86_64-linux.getclosure ];
+              [ inputs.linchpin.outputs.packages.x86_64-linux.getclosure ];
 
             services.reproducibility-automation = {
               enable = true;
@@ -132,3 +133,9 @@ make it a colorful image
 ```sh
 nix-shell -p graphviz --run "nix-store --query --graph /nix/store/lri77scxpmyliswy8caq7si8ps8kxy1a-cargo-vendor-dir.drv > tmp.dot && dot -Tsvg tmp.dot -o out.svg && rm tmp.dot"
 ```
+
+# why linchpin
+from the cambridge dictionary (https://dictionary.cambridge.org/dictionary/english/linchpin):
+> the most important member of a group or part of a system, that holds together the other members or parts or makes it possible for them to operate as intended
+
+Reproducibility for software builds is an interest for software security. Reproducible builds aim to reduce the chances a supply chain attack is successful. Such an attack only needs a single vulnerability.
