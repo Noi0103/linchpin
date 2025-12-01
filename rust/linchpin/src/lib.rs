@@ -486,6 +486,7 @@ pub async fn rebuilder(
 
         // if message of the pipeline_id exists overwrite it with merged_message
         // else create a new message with report_message
+        #[allow(clippy::unnecessary_unwrap)]
         if merged_message.is_some() && comment_id.is_some() {
             // overwrite
             match gitlab

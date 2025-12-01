@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  packages,
   pkgs,
   ...
 }:
@@ -122,7 +123,7 @@
       serviceConfig = {
         Type = "exec";
         ExecStart = "${
-          pkgs.callPackage ./linchpin.nix { }
+          pkgs.callPackage ./packages/linchpin.nix { }
         }/bin/linchpin --db-file ${config.services.linchpin.db-file} --socket-address ${config.services.linchpin.socket-ip}:${builtins.toString config.services.linchpin.port} --nix-store ${config.services.linchpin.nix-store} --gitlab-url ${config.services.linchpin.gitlab-url} --simultaneous-builds ${builtins.toString config.services.linchpin.simultaneous-builds} --gc-links-path ${config.services.linchpin.gc-links-path} ${lib.optionalString config.services.linchpin.persistent-reports "--persistent-reports"} --savefile-path ${config.services.linchpin.savefile-path} --savefile-history-path ${config.services.linchpin.savefile-history-path} --max-rebuild-tries ${builtins.toString config.services.linchpin.max-rebuild-tries}";
         WatchdogSec = "1min";
         Restart = "always";

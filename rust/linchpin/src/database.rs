@@ -131,7 +131,7 @@ impl Database {
 }
 
 impl rusqlite::ToSql for nix_derivation::DerivationState {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput> {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         let value = self.to_string();
         Ok(rusqlite::types::ToSqlOutput::from(value))
     }
@@ -155,7 +155,7 @@ impl rusqlite::types::FromSql for nix_derivation::DerivationState {
 }
 
 impl rusqlite::ToSql for nix_derivation::BuildError {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput> {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         let value = self.to_string();
         Ok(rusqlite::types::ToSqlOutput::from(value))
     }

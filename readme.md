@@ -1,5 +1,12 @@
 A service to rebuild every element of a Nix build closures sent to it and report the results as a GitLab merge request comment.
 
+# TODO
+- [ ] use tokio notify instead of indirect lookups on an arc mutex object
+- [ ] enable multiple conversions from report message object to report message (markdown, json, metrics, ...)
+- [ ] make a trait for a publisher of a report message (gitlab, github, html, ...)
+- [ ] see if cli calls can be replaced with more direct bindings
+- [ ] separate the opentelemetry stuff
+
 # Table of contents
 - [usage example configuration](#usage-example-configuration)
 - [REST endpoints](#rest-endpoints)
