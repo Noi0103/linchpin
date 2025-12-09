@@ -2,7 +2,6 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::http_api::ReportBody;
 use crate::nix_derivation::{self};
 use crate::report_message::ReportMessage;
 
@@ -144,49 +143,6 @@ impl Gitlab {
                 Ok(response)
             }
             Err(e) => Err(e),
-        }
-    }
-
-    /// create a https request against a gitlab instance
-    /// convert given information/Strings into a json body
-    pub async fn send_merge_comment(
-        &self,
-        report: ReportBody,
-        gitlab_message: String,
-    ) -> Result<NotesApiResponse, String> {
-        let http_body: GitlabApiBody = GitlabApiBody {
-            body: gitlab_message,
-        };
-
-        let api_url = format!(
-            "{}/api/v4/projects/{}/merge_requests/{}/notes",
-            self.url, report.ci_merge_request_project_id, report.ci_merge_request_iid
-        );
-
-        let json_body: String =
-            serde_json::to_string(&http_body).expect("parse response json to string");
-
-        // only attempt to send if merge iid and id is present
-        if report.ci_merge_request_project_id.is_empty() || report.ci_merge_request_iid.is_empty() {
-            return Err("no merge request id and iid in the report".to_string());
-        }
-        let client = Client::new();
-        match client
-            .post(&api_url)
-            .header("PRIVATE-TOKEN", &self.token)
-            .header("Content-Type", "application/json")
-            .body(json_body.clone())
-            .send()
-            .await
-        {
-            Ok(a) => {
-                let response: NotesApiResponse = a.json().await.expect("parse error api response");
-                Ok(response)
-            }
-            Err(e) => {
-                let err = format!("gitlab api request to {api_url} failed: {e}");
-                Err(err)
-            }
         }
     }
 }
