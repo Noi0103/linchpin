@@ -5,8 +5,8 @@ use std::time::{Duration, SystemTime};
 
 use serde::{Deserialize, Serialize};
 
-use crate::http_api::Metrics;
 use crate::nix_derivation::{self};
+use crate::server::Metrics;
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct History {

@@ -2,8 +2,8 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use crate::http_api::Metrics;
-use crate::http_api::ReportBody;
+use crate::server::Metrics;
+use crate::server::ReportBody;
 
 /// add report as last in line at the back
 pub fn add_report(

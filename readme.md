@@ -1,11 +1,37 @@
 A service to rebuild every element of a Nix build closures sent to it and report the results as a GitLab merge request comment.
 
 # TODO
-- [ ] use tokio notify instead of indirect lookups on an arc mutex object
+- [ ] use tokio notify instead of indirect lookups on an arc mutex object -> have the tokio tasks communicate directly
 - [ ] enable multiple conversions from report message object to report message (markdown, json, metrics, ...)
 - [ ] make a trait for a publisher of a report message (gitlab, github, html, ...)
 - [ ] see if cli calls can be replaced with more direct bindings
 - [ ] separate the opentelemetry stuff
+
+integrate the new example from the flakeless nix version
+`module = []`
+```nix
+"${linchpin.outPath}/nix/module.nix"
+{
+  services.linchpin = {
+    enable = false;
+    openFirewall = false;
+    socket-ip = "127.0.0.1";
+    port = 8080;
+    gitlab-url = "https://gitlab.noi0103.com";
+    gitlab-token-file = "/etc/gitlab_token";
+    max-rebuild-tries = 1;
+    persistent-reports = false;
+  };
+  environment.etc."gitlab_token".text = "empty-token";
+  environment.systemPackages = [ linchpin.packages."x86_64-linux".getclosure ];
+
+  # WIP
+  nix.settings.post-build-hook = /etc/post-build-hook;
+  environment.etc."post-build-hook.sh".text = ''
+    ${nixpkgs.lib.getExe linchpin.packages."x86_64-linux".getclosure} 127.0.0.1:8080
+  '';
+}
+```
 
 # Table of contents
 - [usage example configuration](#usage-example-configuration)

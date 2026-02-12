@@ -34,6 +34,8 @@ pkgs.mkShell {
   env = {
     RUST_BACKTRACE = "full";
 
+    #TODO get better dev testing here
+
     # gitlab ci shell runner environment
     CI_MERGE_REQUEST_PROJECT_ID = "1229";
     CI_MERGE_REQUEST_IID = "22";

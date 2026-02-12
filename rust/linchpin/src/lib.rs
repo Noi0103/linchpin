@@ -1,280 +1,144 @@
+use anyhow::{anyhow, Context, Error, Result};
+use log::debug;
+use log::error;
+use log::info;
 use std::collections::VecDeque;
-use std::net::SocketAddr;
+use std::fs::create_dir_all;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
-
-use axum::{
-    routing::{get, post},
-    Router,
-};
-use clap::Parser;
-use prometheus_client::registry::Registry;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use std::sync::Arc;
+use std::sync::Mutex;
 
 /// utilities to interact and work with nix store derivations
 pub mod nix_derivation;
-use crate::nix_derivation::active_gc_roots;
-use crate::nix_derivation::{Derivation, DerivationState, JobToplevel};
-
-/// functions to interact with the shared state
-pub mod shared_reports_list;
-use shared_reports_list::*;
 
 /// utilities to interact with the sqlite database to read and write information about nix derivations
 pub mod database;
 use database::Database;
 
 /// handlers for REST api endpoints
-pub mod http_api;
-use http_api::AppState;
-use http_api::Metrics;
-use http_api::ReportBody;
+pub mod server;
 
 /// functions to make message body and interact with gitlab api
 pub mod gitlab;
-use gitlab::Gitlab;
 
-/// create, merge and fmt markdown for human readable report content
-mod report_message;
-use crate::report_message::{HistoryEntry, ReportMessage};
+pub mod publisher;
 
-/// A service to rebuild every element of a Nix build closures sent to it and report the results as a GitLab merge request comment.
-#[derive(Parser, Debug, Clone)]
-#[command(version, about, long_about = None)]
-pub struct Args {
-    /// sqlite filepath to track tested store derivations; e.g. "/your/path/server.db"
-    #[arg(short, long)]
-    pub db_file: PathBuf,
-    /// socket address the tracking server is listening on; e.g. 127.0.0.1:8080
-    #[arg(short, long)]
-    pub socket_address: SocketAddr,
-    /// Gitlab domain to send merge request comments via api; e.g. "https://mygit.domain.com"
-    #[arg(short, long)]
-    pub gitlab_url: String,
-    /// used with `nix-build [paths] ... --store <...>`
-    #[arg(short, long, default_value_t = String::from("ssh-ng://localhost"))]
-    pub nix_store: String,
-    /// used to run multiple nix-build commands at once
-    /// depending on the machine you can balance I/O wait times and out of memory
-    #[arg(long, default_value_t = 1)]
-    pub simultaneous_builds: usize,
-    /// the location where symlinks will be placed to protect needed derivation files from automatic garbage collection
-    #[arg(long, default_value = PathBuf::from("/var/lib/linchpin/gc-roots").into_os_string())]
-    pub gc_links_path: PathBuf,
-    /// load and continue reports that were not finished after restarting the program
-    #[arg(long, default_value_t = false)]
-    pub persistent_reports: bool,
-    /// filepath for saving unfinished reports
-    #[arg(long, default_value = PathBuf::from("/var/lib/linchpin/savefile.json").into_os_string())]
-    pub savefile_path: PathBuf,
-    /// filepath for saving unfinished reports
-    #[arg(long, default_value = PathBuf::from("/var/lib/linchpin/comment-history.json").into_os_string())]
-    pub savefile_history_path: PathBuf,
-    /// how often given the chance a rebuild should be done until it will be skipped
-    /// when skipped the database entry is used at face value
-    #[arg(long, default_value_t = 10)]
-    pub max_rebuild_tries: i32,
-}
+pub mod cli;
+pub mod report_request;
+pub mod report_request_history;
+pub mod report_request_list;
 
-/// constructing the REST server application in the thread by adding sqlite database, socket address, a with rebuilder shared state and REST endpoints
-pub async fn server(
-    database: database::Database,
-    shared_reports_list: Arc<Mutex<VecDeque<ReportBody>>>,
-    metrics: Arc<Mutex<Metrics>>,
-    args: Args,
-) {
-    let socket_addr: std::net::SocketAddr = args.socket_address;
+use crate::cli::Cli;
+use crate::nix_derivation::Derivation;
+use crate::report_request::ClosureElement;
+use crate::report_request_list::ReportRequestList;
 
-    if let Some(parent) = database.db_path.parent() {
-        if !parent.exists() {
-            std::fs::create_dir_all(parent).expect("db-file directory can not be created");
-        }
+use crate::nix_derivation::reset_gc_root;
+
+pub fn initialize_linchpin(
+    cli: &Cli,
+    shared_reports_list: Arc<Mutex<ReportRequestList>>,
+    shared_reports_history: Arc<Mutex<ReportRequestList>>,
+    database: &Database,
+) -> Result<()> {
+    if !&cli.gc_links_dir.exists() {
+        create_dir_all(&cli.gc_links_dir)?;
+    }
+    if !&cli.savefile_path.exists() {
+        create_dir_all(&cli.savefile_path)?;
+    }
+    if !&cli.savefile_history_path.exists() {
+        create_dir_all(&cli.savefile_history_path)?;
     }
 
-    match database.initialize() {
-        Ok(_) => {
-            println!("Database initialized at {:?}", database.db_path)
-        }
-        Err(e) => panic!("{}", e),
-    };
-
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| format!("{}=debug", env!("CARGO_CRATE_NAME")).into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-
-    let app_state = AppState {
-        shared_reports_list: Arc::clone(&shared_reports_list),
-        gc_links_path: args.gc_links_path.clone(),
-        savefile_path: args.savefile_path.clone(),
-        registry: Arc::new(Mutex::new(Registry::default())),
-        metrics,
-    };
-
-    {
-        let mut registry = app_state.registry.lock().expect("registering metrics");
-        registry.register(
-            "linchpin_axum_requests",
-            "Count of requests",
-            app_state
-                .metrics
-                .lock()
-                .expect("registering metrics")
-                .requests
-                .clone(),
-        );
-        registry.register(
-            "linchpin_report_waitlist_len",
-            "Number of reports waiting to be tested",
-            app_state
-                .metrics
-                .lock()
-                .expect("registering metrics")
-                .current_len
-                .clone(),
-        );
-        registry.register(
-            "linchpin_comment_history_len",
-            "Number of comments that were posted and are still stored locally for edits",
-            app_state
-                .metrics
-                .lock()
-                .expect("registering metrics")
-                .comment_history_len
-                .clone(),
-        );
-        registry.register(
-            "linchpin_active_gc_roots",
-            "Number of symlinks that protect toplevel derivation files from garbadge collection",
-            app_state
-                .metrics
-                .lock()
-                .expect("registering metrics")
-                .active_gc_roots
-                .clone(),
-        );
-        registry.register(
-            "linchpin_number_of_pipeline_ids",
-            "Number of different pipeline ids in the waitlist; how many different pipeline ordered a report",
-            app_state
-                .metrics
-                .lock()
-                .expect("registering metrics")
-                .number_of_pipeline_ids
-                .clone(),
-        );
-        registry.register(
-            "linchpin_tokio_workers_count",
-            "value of tokio_metrics::RuntimeMetric.workers_count",
-            app_state
-                .metrics
-                .lock()
-                .expect("registering metrics")
-                .tokio_workers_count
-                .clone(),
-        );
-        registry.register(
-            "linchpin_tokio_total_park_count",
-            "value of tokio_metrics::RuntimeMetric.total_park_count",
-            app_state
-                .metrics
-                .lock()
-                .expect("registering metrics")
-                .tokio_total_park_count
-                .clone(),
-        );
+    let list = shared_reports_list.lock().unwrap();
+    // if cli then load running report list else clear gc roots
+    if cli.persistent_reports {
+        debug!("loading last active report_request_list");
+        list.clone()
+            .load_and_lookup(cli.savefile_path.clone(), database);
+    } else {
+        list.save(&cli.savefile_path)?;
+        reset_gc_root(cli.gc_links_dir.clone())?;
     }
-
-    let app = Router::new()
-        .route("/ping", get(http_api::ping))
-        .route("/metrics", get(http_api::metrics))
-        .route("/report", post(http_api::report))
-        .with_state(app_state)
-        .layer(axum::extract::DefaultBodyLimit::max(1000000000));
-
-    let listener = tokio::net::TcpListener::bind(socket_addr).await.unwrap();
-    tracing::debug!("listening on {}", listener.local_addr().unwrap());
-    axum::serve(listener, app).await.unwrap();
+    // if cli then load done history list else nothing
+    let history = shared_reports_history.lock().unwrap();
+    history
+        .clone()
+        .load_and_lookup(cli.savefile_history_path.clone(), database);
+    Ok(())
 }
 
 /// thread looping to check shared state for reports to process what derivations have what state and might need to be rebuild and documented
 pub async fn rebuilder(
+    cli: Cli,
+    shared_reports_list: Arc<Mutex<ReportRequestList>>,
     database: Database,
-    gitlab: Gitlab,
-    shared_reports_list: Arc<Mutex<VecDeque<ReportBody>>>,
-    shared_metrics: Arc<Mutex<Metrics>>,
-    args: Args,
 ) {
-    // to edit merge comments originating from same pipeline
-    // instead of creating new comments on every toplevel
-    let mut message_history: report_message::History = report_message::History { history: vec![] };
+    info!("HELLO WORLD REBUILDER");
 
-    // how to handle saved file contents after restarting the service
-    // load saved state
-    if args.persistent_reports {
-        match load_shared_reports_list(
-            shared_reports_list.clone(),
-            args.savefile_path.clone(),
-            shared_metrics.clone(),
-        ) {
-            Ok(_) => {}
-            Err(e) => {
-                println!("error: {e}")
-            }
-        };
-        match message_history.load(args.savefile_history_path.clone(), shared_metrics.clone()) {
-            Ok(_) => {}
-            Err(e) => {
-                println!("error: {e}")
-            }
-        };
-        {
-            let metrics = shared_metrics.lock().expect("lock and get metrics");
-            let active_gc_symlinks: i64 = active_gc_roots(args.gc_links_path.clone())
-                .expect("gc dir read error")
-                .len()
-                .try_into()
-                .unwrap();
-            metrics.active_gc_roots.set(active_gc_symlinks);
+    // TODO https://docs.rs/tokio/latest/tokio/sync/mpsc/
 
-            let pipeline_ids: i64 = shared_reports_list_pipeline_ids(shared_reports_list.clone())
-                .len()
-                .try_into()
-                .unwrap();
-            metrics.number_of_pipeline_ids.set(pipeline_ids);
-        }
-    // overwrite saved state with a blank slate
-    } else {
-        match nix_derivation::reset_gc_root(args.gc_links_path.clone()) {
-            Ok(_) => {}
-            Err(e) => {
-                println!("error: {e}")
-            }
-        };
-        match save_shared_reports_list(shared_reports_list.clone(), args.savefile_path.clone()) {
-            Ok(_) => {}
-            Err(e) => {
-                println!("error: {e}")
-            }
-        };
-        message_history.remove_all_entries(shared_metrics.clone());
-        match message_history.save(args.savefile_history_path.clone()) {
-            Ok(_) => {}
-            Err(e) => {
-                println!("error: {e}")
-            }
-        };
-    }
+    // TBD
+    //tokio::time::sleep(std::time::Duration::from_secs(20)).await;
 
-    // used for testing multiple waitlist items prior to removing them
-    // just for debugging
-    tokio::time::sleep(std::time::Duration::from_secs(20)).await;
+    //TODO have data modeled better and receiving working better before touching this stuff
 
     loop {
+        // mpsc let this wait until message
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        // get front report
+        let report_request;
+        {
+            let list = shared_reports_list.lock().unwrap();
+            report_request = list.get_one_report();
+        }
+
+        if report_request.is_none() {
+            //debug!("no report request");
+            continue;
+        }
+
+        let report_request = report_request.unwrap();
+        info!("doing: {}", report_request.store_derivation);
+
+        // lookup what needs to be built (i.e. cli.max_rebuilds > db_write)
+        // rebuild and update db
+        for closure_element in &report_request.store_derivation_closure {
+            match closure_element {
+                ClosureElement::Derivation(derivation) => {
+                    // TODO do these paths properly
+                    if derivation.db_write_count < Some(cli.max_rebuild_tries) {
+                        match derivation
+                            .build_rebuild_upsert(&database, &cli.nix_store)
+                            .await
+                        {
+                            Ok(_) => {
+                                debug!("successfully rebuilt {derivation}")
+                            }
+                            Err(e) => {
+                                error!("rebuilding failed {derivation} {e}")
+                            }
+                        }
+                    }
+                }
+                ClosureElement::Other(_) => {}
+            }
+        }
+        // publish results
+        // move report from todo into history
+        {
+            let mut list = shared_reports_list.lock().unwrap();
+            list.remove_one_report(&report_request);
+            info!("done with {}", report_request.store_derivation);
+        }
+    }
+
+    /*
+    loop {
+
+
         let report: ReportBody = match get_one_report(shared_reports_list.clone()) {
             Some(e) => e,
             None => {
@@ -310,6 +174,7 @@ pub async fn rebuilder(
             .expect("parse pipeline id error");
 
         // edit previously posted merge comment to set known pending jobs
+        /*
         for e in &mut message_history.history {
             if e.pipeline_id
                 == report
@@ -326,7 +191,7 @@ pub async fn rebuilder(
                 tmp_report_message.report_summary.ci_jobs_waiting = ci_jobs_waiting;
                 tmp_report_message.report_summary.ci_jobs_sum += ci_jobs_waiting;
                 match gitlab
-                    .overwrite_merge_comment(
+                    .update_report(
                         tmp_report_message.clone(),
                         e.project_id,
                         e.merge_id,
@@ -345,6 +210,7 @@ pub async fn rebuilder(
                 }
             }
         }
+        */
 
         // filter out .sh/.patch/... files and get a list of derivations
         println!("the number of closure elements: {}", closure.len());
@@ -470,6 +336,7 @@ pub async fn rebuilder(
 
         // check history for an existing comment triggered by this pipeline id
         // make a merged_message and get the comment id to overwrite
+        /*
         let mut merged_message: Option<ReportMessage> = None;
         let mut comment_id: Option<i64> = None;
         for e in &mut message_history.history {
@@ -483,9 +350,11 @@ pub async fn rebuilder(
                 comment_id = Some(e.comment_id);
             }
         }
+        */
 
         // if message of the pipeline_id exists overwrite it with merged_message
         // else create a new message with report_message
+        /*
         #[allow(clippy::unnecessary_unwrap)]
         if merged_message.is_some() && comment_id.is_some() {
             // overwrite
@@ -533,6 +402,7 @@ pub async fn rebuilder(
                 }
             }
         }
+        */
 
         // cleaning
         match toplevel.delete_gc_root(args.gc_links_path.clone()) {
@@ -547,10 +417,10 @@ pub async fn rebuilder(
             Ok(_) => (),
             Err(out) => println!("failed to write savefile: {out:?}"),
         }
-        let _ = message_history.save(args.savefile_history_path.clone());
-        message_history.remove_older_than(24 * 14, shared_metrics.clone());
+        //let _ = message_history.save(args.savefile_history_path.clone());
+        //message_history.remove_older_than(24 * 14, shared_metrics.clone());
         {
-            let metrics = shared_metrics.lock().expect("lock and get metrics");
+            let metrics = shared_metrics.lock().unwrap();
             let active_gc_symlinks: i64 = active_gc_roots(args.gc_links_path.clone())
                 .expect("gc dir read error")
                 .len()
@@ -566,153 +436,5 @@ pub async fn rebuilder(
         }
         println!("finished one report");
     }
-}
-
-/// sort closure to only get .drv paths (removing `.patch`, `.sh` or other)
-fn filter_for_store_derivations(
-    closure_full: Vec<String>,
-) -> Option<Vec<nix_derivation::Derivation>> {
-    let mut closure_derivations: Vec<nix_derivation::Derivation> = Vec::new();
-    if closure_full.is_empty() {
-        return None;
-    };
-    for element in &closure_full {
-        let element_path = std::path::PathBuf::from(&element);
-        match nix_derivation::Derivation::new(element_path) {
-            Ok(a) => closure_derivations.push(a),
-            Err(_) => continue,
-        };
-    }
-    Some(closure_derivations)
-}
-
-/// lookup what has been tested already and determine what is either not yet tested or has attempts left in case a network error previously caused a failure
-fn filter_need_testing(
-    database: Database,
-    derivations: Vec<nix_derivation::Derivation>,
-    max_rebuild_tries: i32,
-) -> Vec<nix_derivation::Derivation> {
-    let mut result: Vec<nix_derivation::Derivation> = vec![];
-
-    for derivation in derivations.clone() {
-        let lookup: Vec<nix_derivation::Derivation> = database
-            .lookup_store_derivation(derivation.file_path.to_str().unwrap().to_string())
-            .expect("sqlite lookup error");
-        match lookup.is_empty() {
-            true => {
-                // sqlite entry does not exist
-                result.push(derivation.clone());
-            }
-            false => {
-                // sqlite entry does exist
-                for lookup_entry in lookup {
-                    // rusqlite provides query results as a vector
-                    // since the key being the query filter will only yield one entry as result
-                    match lookup_entry.state {
-                        Some(nix_derivation::DerivationState::NotTested) => {
-                            result.push(derivation.clone());
-                        }
-                        Some(nix_derivation::DerivationState::Error) => {
-                            println!(
-                                "entry found with {}, initial build probably failed, trying again {}",
-                                nix_derivation::DerivationState::Error,
-                                derivation
-                            );
-                            result.push(derivation.clone());
-                        }
-                        Some(nix_derivation::DerivationState::Reproducible) => {
-                            println!(
-                                "entry found with {}, skipping {}",
-                                nix_derivation::DerivationState::Reproducible,
-                                derivation
-                            );
-                        }
-                        Some(nix_derivation::DerivationState::NonReproducible) => {
-                            let past_rebuilds = lookup_entry.db_write_count.unwrap();
-                            if max_rebuild_tries > past_rebuilds {
-                                println!(
-                                    "entry found with {} and {} attempts, trying again {} ",
-                                    nix_derivation::DerivationState::NonReproducible,
-                                    past_rebuilds,
-                                    derivation,
-                                );
-                                result.push(derivation.clone());
-                            } else {
-                                println!(
-                                    "entry found with {} and {} attempts, skipping {} ",
-                                    nix_derivation::DerivationState::NonReproducible,
-                                    past_rebuilds,
-                                    derivation,
-                                );
-                            }
-                        }
-                        None => {}
-                    }
-                }
-            }
-        }
-    }
-    result
-}
-
-/// helper function to do the initial `nix-build``, the `nix-build --check`` and the sqlite database upsert
-async fn build_rebuild_upsert(
-    database: database::Database,
-    element: nix_derivation::Derivation,
-    nix_store: String,
-) -> std::result::Result<(), ()> {
-    println!("building:   {:?}", element.file_path);
-    let result = element.nix_build_remote(nix_store.clone()).await;
-    match result.status.success() {
-        true => {
-            // initial build or substitution worked
-        }
-        false => {
-            let db_entry: nix_derivation::Derivation = nix_derivation::Derivation {
-                file_path: element.file_path.clone(),
-                state: Some(nix_derivation::DerivationState::Error),
-                error_reason: None, // TODO initial build failure reason Y/N?
-                db_write_count: None,
-                job_toplevel: None,
-            };
-            database
-                .upsert_store_derivation(db_entry)
-                .expect("sqlite update error");
-        }
-    };
-
-    println!("rebuilding: {:?}", element.file_path);
-    let result = element.nix_build_check_remote(nix_store.clone()).await;
-
-    match result.status.success() {
-        true => {
-            let db_entry: nix_derivation::Derivation = nix_derivation::Derivation {
-                file_path: element.file_path.clone(),
-                state: Some(nix_derivation::DerivationState::Reproducible),
-                error_reason: None,
-                db_write_count: None,
-                job_toplevel: None,
-            };
-            database
-                .upsert_store_derivation(db_entry)
-                .expect("sqlite update error");
-        }
-        false => {
-            println!("non reproducible (or error)");
-            let text: String = String::from_utf8_lossy(&result.clone().stderr).to_string();
-            let status: Option<nix_derivation::BuildError> =
-                nix_derivation::parse_nix_build_error(text);
-            let db_entry: nix_derivation::Derivation = nix_derivation::Derivation {
-                file_path: element.file_path.clone(),
-                state: Some(nix_derivation::DerivationState::NonReproducible),
-                error_reason: status,
-                db_write_count: None,
-                job_toplevel: None,
-            };
-            database
-                .upsert_store_derivation(db_entry)
-                .expect("sqlite update error");
-        }
-    }
-    Ok(())
+    */
 }

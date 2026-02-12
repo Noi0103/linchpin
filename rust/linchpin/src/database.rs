@@ -1,6 +1,8 @@
+use std::path::Path;
 use std::path::PathBuf;
 use std::time;
 
+use log::debug;
 use rusqlite::Connection;
 
 use crate::nix_derivation;
@@ -13,6 +15,9 @@ pub struct Database {
 }
 
 impl Database {
+    pub fn new(db_path: PathBuf) -> Database {
+        Database { db_path }
+    }
     /// if it does not exist, create the database with
     /// - the main table itself
     /// - the trigger for a retries count and a last modified date
@@ -45,6 +50,9 @@ impl Database {
         Ok(())
     }
 
+    /// get all entries that fit the store_derivation_path key
+    /// this should only be one but the return type for lookups is always vec
+    /// can return an empty vector
     pub fn lookup_store_derivation(
         &self,
         store_derivation_path: String,
@@ -142,12 +150,12 @@ impl rusqlite::types::FromSql for nix_derivation::DerivationState {
         value: rusqlite::types::ValueRef<'_>,
     ) -> Result<Self, rusqlite::types::FromSqlError> {
         match value.as_str()? {
-            "Error" => Ok(nix_derivation::DerivationState::Error),
+            "Error" => Ok(nix_derivation::DerivationState::BuildError),
             "NotTested" => Ok(nix_derivation::DerivationState::NotTested),
             "Reproducible" => Ok(nix_derivation::DerivationState::Reproducible),
             "NonReproducible" => Ok(nix_derivation::DerivationState::NonReproducible),
             e => {
-                println!("invalid at nix_derivation::DerivationState FromSql {e:?}");
+                debug!("invalid at nix_derivation::DerivationState FromSql {e:?}");
                 Err(rusqlite::types::FromSqlError::InvalidType)
             }
         }
@@ -172,7 +180,7 @@ impl rusqlite::types::FromSql for nix_derivation::BuildError {
             "HashMismatch" => Ok(nix_derivation::BuildError::HashMismatch),
             "NonDeterministic" => Ok(nix_derivation::BuildError::NonDeterministic),
             e => {
-                println!("invalid at nix_derivation::BuildError FromSql {e:?}");
+                debug!("invalid at nix_derivation::BuildError FromSql {e:?}");
                 Err(rusqlite::types::FromSqlError::InvalidType)
             }
         }
@@ -189,7 +197,7 @@ mod tests {
     #[test]
     fn conversion_derivation_state_sql_roundtrip() {
         let states = [
-            DerivationState::Error,
+            DerivationState::BuildError,
             DerivationState::NotTested,
             DerivationState::Reproducible,
             DerivationState::NonReproducible,
