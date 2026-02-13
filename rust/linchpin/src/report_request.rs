@@ -113,8 +113,13 @@ impl ReportRequest {
                     let mut lookup = database
                         .lookup_store_derivation(derivation.clone().try_into().unwrap())
                         .expect("lookup in database failed");
-                    self.store_derivation_closure[index] =
-                        ClosureElement::Derivation(lookup.pop().unwrap());
+                    match lookup.pop() {
+                        Some(lookup_derivation) => {
+                            self.store_derivation_closure[index] =
+                                ClosureElement::Derivation(lookup_derivation);
+                        }
+                        None => {}
+                    }
                 }
                 ClosureElement::Other(_) => {}
             }
