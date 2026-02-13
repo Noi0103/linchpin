@@ -73,20 +73,6 @@ impl From<Derivation> for String {
     }
 }
 impl Derivation {
-    /// create a derivation without any optional values
-    pub fn new(filepath: PathBuf) -> Result<Derivation, Error> {
-        if is_derivation(&filepath) != true {
-            return Err(anyhow!("not a derivation file"));
-        }
-        Ok(Derivation {
-            file_path: filepath,
-            state: None,
-            error_reason: None,
-            db_write_count: None,
-            job_toplevel: None,
-        })
-    }
-
     /// run `nix-build ...`
     pub async fn nix_build_remote(&self, nix_store: String) -> process::Output {
         let store_derivation_path = &self.file_path.to_str().expect("PathBuf to str error");
@@ -241,20 +227,6 @@ pub fn active_gc_roots(gc_links_path: PathBuf) -> Result<Vec<PathBuf>, Error> {
     Ok(gc_symlinks)
 }
 
-fn is_derivation(store_derivation: &std::path::Path) -> bool {
-    let derivation_file_extension = std::ffi::OsStr::new("drv");
-    match store_derivation.extension() {
-        Some(some_extension) => {
-            if some_extension == derivation_file_extension {
-                true
-            } else {
-                false
-            }
-        }
-        _ => false,
-    }
-}
-
 pub fn parse_nix_build_error(text: String) -> BuildError {
     if text.contains("URL returned error:") || text.contains("HTTP error") {
         return BuildError::HTTPError;
@@ -342,14 +314,5 @@ mod tests {
     fn find_parse_non_deterministic_error() {
         let text = String::from("error: derivation '/nix/store/iyx9i1aqh6r4wxd7xc5bbyz1693ifj1r-unstable.drv' may not be deterministic: output '/nix/store/7dy5j86rkc09fhnx6irmpmcx59yaxs9m-unstable' differs");
         assert_eq!(parse_nix_build_error(text), BuildError::NonDeterministic)
-    }
-
-    #[test]
-    fn filepath_is_derivation() {
-        let filepath = Path::new("/tmp/file.drv");
-        assert_eq!(is_derivation(filepath), true);
-
-        let filepath = Path::new("/tmp/file.json");
-        assert_eq!(is_derivation(filepath), false);
     }
 }
