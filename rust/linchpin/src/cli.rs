@@ -43,7 +43,7 @@ pub struct Cli {
     pub savefile_history_path: PathBuf,
     /// how often given the chance a rebuild should be done until it will be skipped
     /// when skipped the database entry is used at face value
-    #[arg(long, default_value_t = 10)]
+    #[arg(long, default_value_t = 3)]
     pub max_rebuild_tries: i32,
 }
 
