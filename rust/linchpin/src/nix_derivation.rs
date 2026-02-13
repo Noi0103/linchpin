@@ -151,8 +151,6 @@ impl Derivation {
                 .expect("missing store derivation in path"),
         );
 
-        println!("deleting garbage collection link {gc_link:?}");
-
         fs::remove_file(&gc_link)
     }
 
@@ -202,9 +200,10 @@ impl Derivation {
 }
 
 /// delete all symlinks that prevent garbadge collection left by a prior process
-pub fn reset_gc_root(gc_links_path: PathBuf) -> Result<()> {
+pub fn reset_gc_root(gc_links_path: &PathBuf) -> Result<()> {
+    debug!("reset gc links");
     if !gc_links_path.exists() {
-        fs::create_dir_all(&gc_links_path)?;
+        return Ok(());
     }
 
     let content = fs::read_dir(gc_links_path)?;
@@ -212,6 +211,7 @@ pub fn reset_gc_root(gc_links_path: PathBuf) -> Result<()> {
     for entry in content {
         let path = entry.expect("reset gc failed").path();
         fs::remove_file(&path)?;
+        debug!("removed gc: {:?}", path);
     }
     Ok(())
 }

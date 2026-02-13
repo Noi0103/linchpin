@@ -63,7 +63,7 @@ pub fn initialize_linchpin(
             .load_and_lookup(cli.savefile_path.clone(), database);
     } else {
         list.save(&cli.savefile_path)?;
-        reset_gc_root(cli.gc_links_dir.clone())?;
+        reset_gc_root(&cli.gc_links_dir)?;
     }
     // if cli then load done history list else nothing
     let history = shared_reports_history.lock().unwrap();
@@ -163,6 +163,7 @@ pub async fn rebuilder(
                 };
             }
         }
+
         // move just finished report from todo into history
         {
             history_list.lock().unwrap().add_one_report(&report_request);
@@ -173,7 +174,9 @@ pub async fn rebuilder(
         }
         report_request
             .store_derivation
-            .delete_gc_root(&cli.gc_links_dir);
+            .delete_gc_root(&cli.gc_links_dir)
+            .expect("removing gc symlink");
+        debug!("removed gc symlink for {}", report_request.store_derivation);
     }
 
     /*
