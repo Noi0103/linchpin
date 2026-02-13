@@ -44,11 +44,11 @@ pub fn initialize_linchpin(
     if !&cli.gc_links_dir.exists() {
         create_dir_all(&cli.gc_links_dir)?;
     }
-    if !&cli.savefile_path.exists() {
-        create_dir_all(&cli.savefile_path)?;
+    if !&cli.savefile_path.parent().unwrap().exists() {
+        create_dir_all(&cli.savefile_path.parent().unwrap())?;
     }
-    if !&cli.savefile_history_path.exists() {
-        create_dir_all(&cli.savefile_history_path)?;
+    if !&cli.savefile_history_path.parent().unwrap().exists() {
+        create_dir_all(&cli.savefile_history_path.parent().unwrap())?;
     }
 
     let list = shared_reports_list.lock().unwrap();
