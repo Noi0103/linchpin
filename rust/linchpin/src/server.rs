@@ -18,6 +18,7 @@ use axum::{
 };
 
 use crate::cli;
+use crate::cli::Cli;
 use crate::database::Database;
 use crate::report_request::ReportRequest;
 use crate::report_request_list::ReportRequestList;
@@ -30,10 +31,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 pub struct AppState {
     /// the live list of reports shared between server and rebuilder thread
     pub shared_reports_list: Arc<Mutex<ReportRequestList>>,
-    /// see config args
-    pub gc_links_path: PathBuf,
-    /// see config args
-    pub savefile_path: PathBuf,
+    /// all cli arguments
+    pub cli: Cli,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -58,8 +57,7 @@ pub async fn server(
 
     let app_state = AppState {
         shared_reports_list: Arc::clone(&shared_reports_list),
-        gc_links_path: cli.gc_links_dir.clone(),
-        savefile_path: cli.savefile_path.clone(),
+        cli: cli.clone(),
     };
 
     let app = Router::new()
@@ -98,7 +96,7 @@ pub async fn handle_report(
     info!("/REPORT");
 
     let shared_reports_list = app_state.shared_reports_list;
-    let gc_links_path = app_state.gc_links_path;
+    let cli = app_state.cli;
 
     // receive all data
     let mut multipart_data: ReportRequestMultipart = ReportRequestMultipart {
@@ -152,6 +150,11 @@ pub async fn handle_report(
         .lock()
         .unwrap()
         .add_one_report(&report_request);
+    shared_reports_list
+        .lock()
+        .unwrap()
+        .save(&cli.savefile_path)
+        .expect("failed saving");
 
     info!(
         "received closure paths for: /nix/store/{}",
@@ -170,7 +173,7 @@ pub async fn handle_report(
     // create gc symlinks
     match report_request
         .store_derivation
-        .create_gc_root(gc_links_path.clone())
+        .create_gc_root(&cli.gc_links_dir)
     {
         Ok(_) => {}
         Err(e) => return "gc root could not be created",

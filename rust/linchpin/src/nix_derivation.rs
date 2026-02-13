@@ -127,7 +127,7 @@ impl Derivation {
     }
 
     /// should be used with the toplevel store derivation
-    pub fn create_gc_root(&self, gc_links_path: PathBuf) -> Result<std::process::Output, Error> {
+    pub fn create_gc_root(&self, gc_links_path: &PathBuf) -> Result<std::process::Output, Error> {
         if !gc_links_path.exists() {
             fs::create_dir_all(&gc_links_path)
                 .expect("gc root symlinks directory can not be created");
