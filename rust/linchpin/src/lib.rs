@@ -171,6 +171,9 @@ pub async fn rebuilder(
             list.remove_one_report(&report_request);
             info!("done with {}", report_request.store_derivation);
         }
+        report_request
+            .store_derivation
+            .delete_gc_root(&cli.gc_links_dir);
     }
 
     /*

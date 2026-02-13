@@ -158,8 +158,8 @@ impl Derivation {
         Ok(output)
     }
 
-    pub fn delete_gc_root(&self, gc_links_path: PathBuf) -> io::Result<()> {
-        let gc_link: PathBuf = Path::new(&gc_links_path).join(
+    pub fn delete_gc_root(&self, gc_links_path: &PathBuf) -> io::Result<()> {
+        let gc_link: PathBuf = Path::new(gc_links_path).join(
             self.file_path
                 .file_name()
                 .expect("missing store derivation in path"),
