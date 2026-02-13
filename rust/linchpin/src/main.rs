@@ -142,6 +142,7 @@ async fn main() -> Result<()> {
     let task_rebuilder = tokio::task::spawn(linchpin::rebuilder(
         cli.clone(),
         shared_reports_list.clone(),
+        shared_reports_history.clone(),
         database.clone(),
     ));
 

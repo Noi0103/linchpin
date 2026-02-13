@@ -77,6 +77,7 @@ pub fn initialize_linchpin(
 pub async fn rebuilder(
     cli: Cli,
     shared_reports_list: Arc<Mutex<ReportRequestList>>,
+    history_list: Arc<Mutex<ReportRequestList>>,
     database: Database,
 ) {
     info!("HELLO WORLD REBUILDER");
@@ -164,6 +165,8 @@ pub async fn rebuilder(
         }
         // move just finished report from todo into history
         {
+            history_list.lock().unwrap().add_one_report(&report_request);
+
             let mut list = shared_reports_list.lock().unwrap();
             list.remove_one_report(&report_request);
             info!("done with {}", report_request.store_derivation);
