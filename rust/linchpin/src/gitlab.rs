@@ -99,7 +99,7 @@ pub struct Args {
 
 // TODO take refs instead
 impl Gitlab {
-    async fn publish_report(&self, request: ReportRequest) -> Result<(), Error> {
+    pub async fn publish_report(&self, request: &ReportRequest) -> Result<(), Error> {
         let project_id = match &request.publisher_data {
             Publisher::Gitlab(meta) => meta.ci_merge_request_project_id.clone(),
             _ => return Err(anyhow!("missing metadata")),
@@ -137,7 +137,7 @@ impl Gitlab {
         }
     }
     /// you already found a fitting past event in the history and want to overwrite the post
-    async fn update_report(&self, request: ReportRequest) -> Result<(), reqwest::Error> {
+    pub async fn update_report(&self, request: &ReportRequest) -> Result<(), reqwest::Error> {
         // overwrite old published message with the updated one
         // on fail: call publish?
         todo!();
