@@ -105,12 +105,12 @@ pub async fn rebuilder(
             continue;
         }
 
-        let report_request = report_request.unwrap();
+        let mut report_request = report_request.unwrap();
         info!("doing: {}", report_request.store_derivation);
 
         // lookup what needs to be built (i.e. cli.max_rebuilds > db_write)
         // rebuild and update db
-        for closure_element in &report_request.store_derivation_closure {
+        for closure_element in &mut report_request.store_derivation_closure {
             //TODO simultaneous builds feature is missing
             match closure_element {
                 ClosureElement::Derivation(derivation) => {
@@ -168,7 +168,7 @@ pub async fn rebuilder(
             history_list.lock().unwrap().add_one_report(&report_request);
 
             let mut list = shared_reports_list.lock().unwrap();
-            list.remove_one_report(&report_request);
+            list.remove_one_report(report_request.clone());
             info!("done with {}", report_request.store_derivation);
         }
         report_request

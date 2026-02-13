@@ -172,7 +172,7 @@ impl Derivation {
 
     /// helper function to do the initial `nix-build``, the `nix-build --check`` and the sqlite database upsert
     pub async fn build_rebuild_upsert(
-        &self,
+        &mut self,
         database: &Database,
         nix_store: &String,
     ) -> Result<()> {
@@ -195,31 +195,20 @@ impl Derivation {
 
         info!("rebuilding: {self}");
         let result = self.nix_build_check_remote(&nix_store).await;
-        if !result.status.success() {
+
+        if result.status.success() {
+            info!("built reproducible");
+            self.state = Some(DerivationState::Reproducible);
+        } else {
             info!("non reproducible (or build error)");
             let stderr: String = String::from_utf8_lossy(&result.stderr).to_string();
             let build_error: BuildError = parse_nix_build_error(stderr);
-            let db_entry = Derivation {
-                file_path: self.file_path.clone(),
-                state: Some(DerivationState::NonReproducible),
-                error_reason: Some(build_error),
-                db_write_count: None,
-                job_toplevel: None,
-            };
-            database
-                .upsert_store_derivation(db_entry)
-                .expect("sqlite update error");
+            self.state = Some(DerivationState::NonReproducible);
+            self.error_reason = Some(build_error);
         }
 
-        let db_entry = Derivation {
-            file_path: self.file_path.clone(),
-            state: Some(DerivationState::Reproducible),
-            error_reason: None,
-            db_write_count: None,
-            job_toplevel: None,
-        };
         database
-            .upsert_store_derivation(db_entry)
+            .upsert_store_derivation(self.clone())
             .expect("sqlite update error");
 
         Ok(())

@@ -38,8 +38,9 @@ impl ReportRequestList {
     pub fn get_one_report(&self) -> Option<ReportRequest> {
         self.report_requests.front().cloned()
     }
-    pub fn remove_one_report(&mut self, report_request: &ReportRequest) {
-        self.report_requests.retain(|x| x != report_request);
+    pub fn remove_one_report(&mut self, report_request: ReportRequest) {
+        self.report_requests
+            .retain(|x| x.store_derivation != report_request.store_derivation);
     }
     pub fn save(&self, path: &PathBuf) -> Result<(), Error> {
         let json: String =
