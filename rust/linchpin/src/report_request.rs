@@ -173,4 +173,45 @@ impl ReportRequest {
         }
         Ok(untested)
     }
+
+    pub fn print_summary(&self) {
+        info!(
+            "full closure count: {}",
+            self.store_derivation_closure.len()
+        );
+
+        // all derivations count
+        let derivations: Vec<Derivation> = self
+            .store_derivation_closure
+            .iter()
+            .cloned()
+            .filter_map(|x| {
+                if let ClosureElement::Derivation(derivation) = x {
+                    Some(derivation.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        info!("derivation count {}", derivations.len());
+
+        // reproducible derivations count
+        let derivations_reproducible: Vec<Derivation> = derivations
+            .iter()
+            .cloned()
+            .filter(|x| &DerivationState::Reproducible == x.state.as_ref().unwrap())
+            .collect();
+        info!("reproducible count {}", derivations_reproducible.len());
+
+        // non reproducible derivations count
+        let derivations_non_reproducible: Vec<Derivation> = derivations
+            .iter()
+            .cloned()
+            .filter(|x| &DerivationState::NonReproducible == x.state.as_ref().unwrap())
+            .collect();
+        info!(
+            "non-reproducible count {}",
+            derivations_non_reproducible.len()
+        );
+    }
 }
