@@ -3,6 +3,7 @@ use log::debug;
 use log::error;
 use log::info;
 use std::collections::VecDeque;
+use std::fs;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -29,8 +30,11 @@ pub mod report_request_history;
 pub mod report_request_list;
 
 use crate::cli::Cli;
+use crate::gitlab::Gitlab;
 use crate::nix_derivation::Derivation;
+use crate::nix_derivation::DerivationState;
 use crate::report_request::ClosureElement;
+use crate::report_request::Publisher;
 use crate::report_request_list::ReportRequestList;
 
 use crate::nix_derivation::reset_gc_root;
@@ -106,10 +110,13 @@ pub async fn rebuilder(
         // lookup what needs to be built (i.e. cli.max_rebuilds > db_write)
         // rebuild and update db
         for closure_element in &report_request.store_derivation_closure {
+            //TODO simultaneous builds feature is missing
             match closure_element {
                 ClosureElement::Derivation(derivation) => {
                     // TODO do these paths properly
-                    if derivation.db_write_count < Some(cli.max_rebuild_tries) {
+                    if derivation.db_write_count < Some(cli.max_rebuild_tries)
+                        && derivation.state != Some(DerivationState::Reproducible)
+                    {
                         match derivation
                             .build_rebuild_upsert(&database, &cli.nix_store)
                             .await
@@ -127,7 +134,35 @@ pub async fn rebuilder(
             }
         }
         // publish results
-        // move report from todo into history
+        match &report_request.publisher_data {
+            Publisher::Cli() => {
+                info!("publishing to cli:");
+                report_request.print_summary();
+            }
+            Publisher::Gitlab(metadata_gitlab) => {
+                // TODO this unwrap can panic
+                let url = cli.clone().gitlab.unwrap().gitlab_url.clone().unwrap();
+
+                let token: String = String::from_utf8(
+                    fs::read(cli.clone().gitlab.unwrap().gitlab_api_token_file.unwrap())
+                        .expect("reading gitlab token"),
+                )
+                .expect("utf8 to string");
+                let gitlab = Gitlab { url, token };
+                // TODO check history entries decide: update or publish
+                match gitlab.publish_report(&report_request).await {
+                    Ok(_) => {
+                        info!("published to gitlab");
+                    }
+                    Err(e) => {
+                        error!("failed publishing to gitlab");
+                        // TODO how do i handle this case and give feedback?
+                        // a user will just wait indefinetly for the comment
+                    }
+                };
+            }
+        }
+        // move just finished report from todo into history
         {
             let mut list = shared_reports_list.lock().unwrap();
             list.remove_one_report(&report_request);
