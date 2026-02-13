@@ -199,7 +199,10 @@ impl ReportRequest {
         let derivations_reproducible: Vec<Derivation> = derivations
             .iter()
             .cloned()
-            .filter(|x| &DerivationState::Reproducible == x.state.as_ref().unwrap())
+            .filter(|x| {
+                &DerivationState::Reproducible
+                    == x.state.as_ref().unwrap_or(&DerivationState::NotTested)
+            })
             .collect();
         info!("reproducible count {}", derivations_reproducible.len());
 
@@ -207,7 +210,12 @@ impl ReportRequest {
         let derivations_non_reproducible: Vec<Derivation> = derivations
             .iter()
             .cloned()
-            .filter(|x| &DerivationState::NonReproducible == x.state.as_ref().unwrap())
+            .filter(|x| {
+                &DerivationState::NonReproducible
+                    == x.state
+                        .as_ref()
+                        .unwrap_or(&DerivationState::NonReproducible)
+            })
             .collect();
         info!(
             "non-reproducible count {}",
