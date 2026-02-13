@@ -4,6 +4,7 @@
 // calling formatters for md or json from here
 
 use anyhow::{anyhow, Error};
+use log::debug;
 use reqwest::Client;
 use serde::Deserialize;
 use serde::Serialize;
@@ -93,10 +94,6 @@ pub struct Author {
 #[serde(rename_all = "camelCase")]
 pub struct CommandsChanges {}
 
-pub struct Args {
-    url: String,
-}
-
 // TODO take refs instead
 impl Gitlab {
     pub async fn publish_report(&self, request: &ReportRequest) -> Result<(), Error> {
@@ -115,7 +112,7 @@ impl Gitlab {
             self.url, project_id, iid,
         );
         let body: String = serde_json::to_string(&GitlabApiBody {
-            body: Gitlab::to_markdown(&request).to_string(),
+            body: Gitlab::to_markdown(request).to_string(),
         })
         .expect("parse response json to string");
 
@@ -128,9 +125,9 @@ impl Gitlab {
             .await
         {
             Ok(a) => {
-                println!("api response raw: {a:?}");
+                debug!("api response raw: {a:?}");
                 let response: NotesApiResponse = a.json().await.expect("parse error api response");
-
+                debug!("gitlab api says updated at: {}", response.updated_at);
                 Ok(())
             }
             Err(e) => Err(e.into()),
@@ -140,6 +137,7 @@ impl Gitlab {
     pub async fn update_report(&self, request: &ReportRequest) -> Result<(), reqwest::Error> {
         // overwrite old published message with the updated one
         // on fail: call publish?
+        debug!("updating report for: {}", request.store_derivation);
         todo!();
     }
 

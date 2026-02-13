@@ -1,5 +1,4 @@
 use std::io::Write;
-use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -19,12 +18,10 @@ use axum::{
 
 use crate::cli;
 use crate::cli::Cli;
-use crate::database::Database;
 use crate::report_request::ReportRequest;
 use crate::report_request_list::ReportRequestList;
 use log::debug;
 use log::info;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 /// axum's Router can only take one with_state()
 #[derive(Debug, Clone)]
@@ -46,11 +43,7 @@ pub struct MethodLabels {
 }
 
 /// constructing the REST server application in the thread by adding sqlite database, socket address, a with rebuilder shared state and REST endpoints
-pub async fn server(
-    cli: cli::Cli,
-    shared_reports_list: Arc<Mutex<ReportRequestList>>,
-    database: Database,
-) {
+pub async fn server(cli: cli::Cli, shared_reports_list: Arc<Mutex<ReportRequestList>>) {
     info!("HELLO WORLD SERVER");
 
     let socket_addr: std::net::SocketAddr = cli.socket_address;
@@ -176,7 +169,7 @@ pub async fn handle_report(
         .create_gc_root(&cli.gc_links_dir)
     {
         Ok(_) => {}
-        Err(e) => return "gc root could not be created",
+        Err(_) => return "gc root could not be created",
     }
 
     // respond with a success

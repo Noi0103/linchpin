@@ -1,5 +1,4 @@
 use std::fs::create_dir_all;
-use std::path::Path;
 use std::path::PathBuf;
 use std::time;
 
@@ -24,7 +23,7 @@ impl Database {
     /// - the trigger for a retries count and a last modified date
     pub fn initialize(&self) -> Result<(), rusqlite::Error> {
         if !&self.db_path.parent().unwrap().exists() {
-            create_dir_all(&self.db_path.parent().unwrap())
+            create_dir_all(self.db_path.parent().unwrap())
                 .expect("failed to create db_path parents");
         };
         let conn = Connection::open(&self.db_path)?;

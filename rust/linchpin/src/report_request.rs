@@ -49,7 +49,7 @@ pub enum Publisher {
 }
 
 impl ReportRequest {
-    pub fn get_toplevel_derivations(&self, derivation: Derivation) -> &Derivation {
+    pub fn get_toplevel_derivations(&self) -> &Derivation {
         todo!()
     }
 
@@ -106,19 +106,16 @@ impl ReportRequest {
     }
 
     /// Load a report_request and lookup the status in the database
-    pub fn lookup(&mut self, path: PathBuf, database: &Database) {
+    pub fn lookup(&mut self, database: &Database) {
         for index in 0..self.store_derivation_closure.len() {
             match &self.store_derivation_closure[index] {
                 ClosureElement::Derivation(derivation) => {
                     let mut lookup = database
-                        .lookup_store_derivation(derivation.clone().try_into().unwrap())
+                        .lookup_store_derivation(derivation.clone().into())
                         .expect("lookup in database failed");
-                    match lookup.pop() {
-                        Some(lookup_derivation) => {
-                            self.store_derivation_closure[index] =
-                                ClosureElement::Derivation(lookup_derivation);
-                        }
-                        None => {}
+                    if let Some(lookup_derivation) = lookup.pop() {
+                        self.store_derivation_closure[index] =
+                            ClosureElement::Derivation(lookup_derivation);
                     }
                 }
                 ClosureElement::Other(_) => {}
@@ -138,8 +135,8 @@ impl ReportRequest {
             match elem {
                 ClosureElement::Derivation(drv) => {
                     let derivation_string = drv.file_path.display().to_string();
-                    let mut lookup = database.lookup_store_derivation(derivation_string)?;
-                    if lookup.len() > 0 {
+                    let lookup = database.lookup_store_derivation(derivation_string)?;
+                    if !lookup.is_empty() {
                         debug!("no entry found {drv}");
                         untested.push(drv);
                     }
@@ -203,24 +200,24 @@ impl ReportRequest {
         // reproducible derivations count
         let derivations_reproducible: Vec<Derivation> = derivations
             .iter()
-            .cloned()
-            .filter(|x| {
+            .filter(|&x| {
                 &DerivationState::Reproducible
                     == x.state.as_ref().unwrap_or(&DerivationState::NotTested)
             })
+            .cloned()
             .collect();
         info!("reproducible count {}", derivations_reproducible.len());
 
         // non reproducible derivations count
         let derivations_non_reproducible: Vec<Derivation> = derivations
             .iter()
-            .cloned()
-            .filter(|x| {
+            .filter(|&x| {
                 &DerivationState::NonReproducible
                     == x.state
                         .as_ref()
                         .unwrap_or(&DerivationState::NonReproducible)
             })
+            .cloned()
             .collect();
         info!(
             "non-reproducible count {}",

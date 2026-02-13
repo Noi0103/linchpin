@@ -1,10 +1,8 @@
-use std::convert::Infallible;
 use std::path::{Path, PathBuf};
-use std::{convert, fs, io, process};
+use std::{fs, io, process};
 
 use anyhow::{anyhow, Error, Ok, Result};
 use log::debug;
-use log::error;
 use log::info;
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -58,7 +56,7 @@ impl TryFrom<String> for Derivation {
         }
         let file_path = PathBuf::from(string);
         Ok(Derivation {
-            file_path: file_path,
+            file_path,
             state: None,
             error_reason: None,
             db_write_count: None,
@@ -93,7 +91,7 @@ impl Derivation {
     }
 
     /// run `nix-build --check ...`
-    pub async fn nix_build_check_remote(&self, nix_store: &String) -> process::Output {
+    pub async fn nix_build_check_remote(&self, nix_store: &str) -> process::Output {
         let store_derivation_path = &self.file_path.to_str().expect("PathBuf to str error");
 
         tokio::process::Command::new("nix-build")
@@ -115,7 +113,7 @@ impl Derivation {
     /// should be used with the toplevel store derivation
     pub fn create_gc_root(&self, gc_links_path: &PathBuf) -> Result<std::process::Output, Error> {
         if !gc_links_path.exists() {
-            fs::create_dir_all(&gc_links_path)
+            fs::create_dir_all(gc_links_path)
                 .expect("gc root symlinks directory can not be created");
         }
 
@@ -158,10 +156,10 @@ impl Derivation {
     pub async fn build_rebuild_upsert(
         &mut self,
         database: &Database,
-        nix_store: &String,
+        nix_store: &str,
     ) -> Result<()> {
         info!("building {self}");
-        let result = self.nix_build_remote(nix_store.clone()).await;
+        let result = self.nix_build_remote(nix_store.to_owned()).await;
         // initial build failed
         if !result.status.success() {
             let db_entry = Derivation {
@@ -178,7 +176,7 @@ impl Derivation {
         };
 
         info!("rebuilding: {self}");
-        let result = self.nix_build_check_remote(&nix_store).await;
+        let result = self.nix_build_check_remote(nix_store).await;
 
         if result.status.success() {
             info!("built reproducible");

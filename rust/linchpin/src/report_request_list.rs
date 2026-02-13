@@ -2,13 +2,12 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 
 use anyhow::Error;
+use anyhow::Result;
 use log::info;
 use serde::Deserialize;
 use serde::Serialize;
-use tracing_subscriber::registry::Data;
 
 use crate::database::Database;
-use crate::report_request;
 use crate::report_request::ReportRequest;
 
 /// The grand todo list of report requests that will be rebuillt over time.
@@ -19,6 +18,12 @@ pub struct ReportRequestList {
 }
 
 // TODO docstrings
+impl Default for ReportRequestList {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ReportRequestList {
     pub fn new() -> ReportRequestList {
         ReportRequestList {
@@ -66,13 +71,17 @@ impl ReportRequestList {
         );
         Ok(())
     }
-    pub fn load_and_lookup(&mut self, path: PathBuf, database: &Database) {
-        self.load(path.clone());
+    pub fn load_and_lookup(&mut self, path: PathBuf, database: &Database) -> Result<()> {
+        self.load(path.clone())?;
         for index in 0..self.report_requests.len() {
-            self.report_requests[index].lookup(path.clone(), database);
+            self.report_requests[index].lookup(database);
         }
+        Ok(())
     }
     pub fn len(&self) -> usize {
         self.report_requests.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.report_requests.is_empty()
     }
 }

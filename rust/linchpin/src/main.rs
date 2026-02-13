@@ -3,13 +3,13 @@ use std::sync::{Arc, Mutex};
 use anyhow::{Context, Result};
 use clap::Parser;
 use libsystemd::daemon::{notify, watchdog_enabled, NotifyState};
-use log::debug;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
 use linchpin::cli::Cli;
 use linchpin::database::Database;
-use linchpin::{report_request::ReportRequest, report_request_list::ReportRequestList};
+use linchpin::report_request_history::ReportRequestHistoryList;
+use linchpin::report_request_list::ReportRequestList;
 
 /// spawn two tokio tasks and continue to send keep-alive messages through sd_notify and systemd (watchdog)
 #[cfg(target_has_atomic = "ptr")]
@@ -17,13 +17,7 @@ use linchpin::{report_request::ReportRequest, report_request_list::ReportRequest
 async fn main() -> Result<()> {
     // sort out args stuff
 
-    use linchpin::{
-        gitlab::PublisherMetadataGitlab,
-        initialize_linchpin,
-        nix_derivation::Derivation,
-        report_request::{self, ClosureElement, Publisher},
-    };
-    use tokio::sync::mpsc::channel;
+    use linchpin::initialize_linchpin;
 
     let cli = Cli::parse();
 
@@ -117,7 +111,7 @@ async fn main() -> Result<()> {
 
     // tracking object what reports are ongoing and waiting
     let shared_reports_list = Arc::new(Mutex::new(ReportRequestList::new()));
-    let shared_reports_history = Arc::new(Mutex::new(ReportRequestList::new()));
+    let shared_reports_history = Arc::new(Mutex::new(ReportRequestHistoryList::new()));
     let database = Database::new(cli.db_file.clone());
     database.initialize().expect("failed initialization");
 
@@ -135,7 +129,6 @@ async fn main() -> Result<()> {
     let task_server = tokio::task::spawn(linchpin::server::server(
         cli.clone(),
         shared_reports_list.clone(),
-        database.clone(),
     ));
 
     // rebuild and work through the ReportRequests

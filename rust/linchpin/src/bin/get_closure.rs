@@ -1,14 +1,11 @@
-use linchpin::gitlab::{Gitlab, PublisherMetadataGitlab};
-use linchpin::nix_derivation;
+use linchpin::gitlab::PublisherMetadataGitlab;
 use linchpin::report_request::Publisher;
 
 use anyhow::{anyhow, Context, Error, Result};
-use clap::{Args, Parser};
+use clap::Parser;
 use log::debug;
 use log::error;
-use log::trace;
 use nix_daemon::nix::DaemonStore;
-use nix_daemon::PathInfo;
 use nix_daemon::Progress;
 use nix_daemon::Store;
 use reqwest::Client;
@@ -18,19 +15,14 @@ use tracing_subscriber::FmtSubscriber;
 
 use std::env;
 use std::fs;
-use std::net::SocketAddr;
-use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
-use std::process::Stdio;
-use std::thread;
 
 //server uses axum bytes
-use std::str::Bytes;
 
 #[cfg(target_has_atomic = "ptr")]
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    use linchpin::report_request::{self, ClosureElement, ReportRequest};
+    use linchpin::report_request::{ClosureElement, ReportRequest};
 
     let cli = Cli::parse();
 
@@ -56,21 +48,20 @@ async fn main() -> Result<(), Error> {
     info!("hello world");
 
     // get store derivation via result symlink
-    let store_derivations: Vec<String>;
-    if cli.derivation.is_none() {
+    let store_derivations: Vec<String> = if cli.derivation.is_none() {
         let store_output_path = fs::read_link("result")?;
         info!("using result symlink");
 
         let store_output_path_str = store_output_path.to_str().unwrap();
         info!("output store path {store_output_path_str}");
 
-        store_derivations = store
+        store
             .query_valid_derivers(store_output_path_str)
             .result()
-            .await?;
+            .await?
     } else {
-        store_derivations = vec![cli.derivation.unwrap().to_str().unwrap().into()];
-    }
+        vec![cli.derivation.unwrap().to_str().unwrap().into()]
+    };
 
     info!("deriver store paths {:?}", store_derivations);
 
@@ -87,7 +78,7 @@ async fn main() -> Result<(), Error> {
             "inspecting dependency tree level with count: {}",
             todo_derivations.len()
         );
-        if todo_derivations.len() == 0 {
+        if todo_derivations.is_empty() {
             break;
         }
         for derivation in &todo_derivations {
@@ -145,11 +136,11 @@ async fn main() -> Result<(), Error> {
     );
     // do the rest specific to the publisher
     if cli.cli {
-        handle_cli();
+        handle_cli().expect("handle cli");
         // closure needs to be converted to ClosureElement(Derivation) and ClosureElement(Other)
         let report_request: ReportRequest = ReportRequest {
             store_derivation: store_derivations
-                .get(0)
+                .first()
                 .unwrap()
                 .clone()
                 .try_into()
@@ -180,8 +171,41 @@ async fn main() -> Result<(), Error> {
             }
         };
         Ok(())
-    //} else if cli.gitlab {
-    //    handle_gitlab()
+    } else if cli.gitlab {
+        let meta_gitlab: PublisherMetadataGitlab =
+            handle_gitlab().expect("collect gitlab metadata");
+        let report_request: ReportRequest = ReportRequest {
+            store_derivation: store_derivations
+                .first()
+                .unwrap()
+                .clone()
+                .try_into()
+                .expect("toplevel is not a drv"),
+            store_derivation_closure: build_closure,
+            publisher_data: Publisher::Gitlab(meta_gitlab.clone()),
+        };
+        let report_request_string =
+            serde_json::to_string(&report_request).expect("failed serde_json::to_string");
+
+        let form = reqwest::multipart::Form::new()
+            .part(
+                "json",
+                reqwest::multipart::Part::text(report_request_string),
+            )
+            .part(
+                "closure",
+                reqwest::multipart::Part::bytes(serialized_nix_store),
+            );
+
+        match Client::new().post(&cli.url).multipart(form).send().await {
+            Ok(response) => {
+                info!("api response raw: {:?}", response);
+            }
+            Err(e) => {
+                error!("multipart did not send correctly: {e}");
+            }
+        };
+        Ok(())
     } else {
         error!("not properly handled for a publisher");
         Err(anyhow!("not properly handled for a publisher"))
@@ -202,7 +226,7 @@ fn handle_cli() -> Result<()> {
     Ok(())
 }
 
-fn handle_gitlab() -> Result<()> {
+fn handle_gitlab() -> Result<PublisherMetadataGitlab> {
     // collect chosen publisher info -> early fail
     let metadata = PublisherMetadataGitlab {
         ci_merge_request_project_id: env::var("ci_merge_request_project_id")?,
@@ -212,25 +236,7 @@ fn handle_gitlab() -> Result<()> {
         ci_pipeline_id: env::var("ci_pipeline_id")?,
     };
 
-    // send it
-    /*
-    match Client::new()
-        .post(&url)
-        .header("PRIVATE-TOKEN", &self.token)
-        .header("Content-Type", "application/json")
-        .body(body.clone())
-        .send()
-        .await
-    {
-        Ok(a) => {
-            println!("api response raw: {a:?}");
-            let response: NotesApiResponse = a.json().await.expect("parse error api response");
-            Ok(response)
-        }
-        Err(e) => Err(e),
-    }
-    */
-    Ok(())
+    Ok(metadata)
 }
 
 #[derive(Parser, Debug, Clone)]

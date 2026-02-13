@@ -1,7 +1,3 @@
-use reqwest::Result;
-use std::{any::Any, fmt::Debug};
-use typetag;
-
 use crate::report_request::ReportRequest;
 
 pub enum PublisherName {

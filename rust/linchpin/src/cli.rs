@@ -39,7 +39,7 @@ pub struct Cli {
     #[arg(long, default_value = PathBuf::from("/tmp/linchpin/savefile.json").into_os_string())]
     pub savefile_path: PathBuf,
     /// filepath for saving unfinished reports
-    #[arg(long, default_value = PathBuf::from("/tmp/linchpin/comment-history.json").into_os_string())]
+    #[arg(long, default_value = PathBuf::from("/tmp/linchpin/history.json").into_os_string())]
     pub savefile_history_path: PathBuf,
     /// how often given the chance a rebuild should be done until it will be skipped
     /// when skipped the database entry is used at face value

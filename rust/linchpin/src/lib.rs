@@ -1,11 +1,9 @@
-use anyhow::{anyhow, Context, Error, Result};
+use anyhow::Result;
 use log::debug;
 use log::error;
 use log::info;
-use std::collections::VecDeque;
 use std::fs;
 use std::fs::create_dir_all;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -31,10 +29,10 @@ pub mod report_request_list;
 
 use crate::cli::Cli;
 use crate::gitlab::Gitlab;
-use crate::nix_derivation::Derivation;
 use crate::nix_derivation::DerivationState;
 use crate::report_request::ClosureElement;
 use crate::report_request::Publisher;
+use crate::report_request_history::ReportRequestHistoryList;
 use crate::report_request_list::ReportRequestList;
 
 use crate::nix_derivation::reset_gc_root;
@@ -42,17 +40,20 @@ use crate::nix_derivation::reset_gc_root;
 pub fn initialize_linchpin(
     cli: &Cli,
     shared_reports_list: Arc<Mutex<ReportRequestList>>,
-    shared_reports_history: Arc<Mutex<ReportRequestList>>,
+    shared_reports_history: Arc<Mutex<ReportRequestHistoryList>>,
     database: &Database,
 ) -> Result<()> {
     if !&cli.gc_links_dir.exists() {
+        debug!("creating gc links dir");
         create_dir_all(&cli.gc_links_dir)?;
     }
     if !&cli.savefile_path.parent().unwrap().exists() {
-        create_dir_all(&cli.savefile_path.parent().unwrap())?;
+        debug!("creating savefile path parent");
+        create_dir_all(cli.savefile_path.parent().unwrap())?;
     }
     if !&cli.savefile_history_path.parent().unwrap().exists() {
-        create_dir_all(&cli.savefile_history_path.parent().unwrap())?;
+        debug!("creating history path parent");
+        create_dir_all(cli.savefile_history_path.parent().unwrap())?;
     }
 
     let list = shared_reports_list.lock().unwrap();
@@ -60,16 +61,22 @@ pub fn initialize_linchpin(
     if cli.persistent_reports {
         debug!("loading last active report_request_list");
         list.clone()
-            .load_and_lookup(cli.savefile_path.clone(), database);
+            .load_and_lookup(cli.savefile_path.clone(), database)?;
     } else {
         list.save(&cli.savefile_path)?;
         reset_gc_root(&cli.gc_links_dir)?;
     }
+
     // if cli then load done history list else nothing
-    let history = shared_reports_history.lock().unwrap();
-    history
-        .clone()
-        .load_and_lookup(cli.savefile_history_path.clone(), database);
+    let mut history = shared_reports_history.lock().unwrap();
+    if cli.savefile_history_path.exists() {
+        debug!("loading history");
+        history.load(&cli.savefile_history_path)?;
+    } else {
+        debug!("no history found");
+        history.save(&cli.savefile_history_path)?;
+    }
+
     Ok(())
 }
 
@@ -77,7 +84,7 @@ pub fn initialize_linchpin(
 pub async fn rebuilder(
     cli: Cli,
     shared_reports_list: Arc<Mutex<ReportRequestList>>,
-    history_list: Arc<Mutex<ReportRequestList>>,
+    history_list: Arc<Mutex<ReportRequestHistoryList>>,
     database: Database,
 ) {
     info!("HELLO WORLD REBUILDER");
@@ -140,7 +147,7 @@ pub async fn rebuilder(
                 info!("publishing to cli:");
                 report_request.print_summary();
             }
-            Publisher::Gitlab(metadata_gitlab) => {
+            Publisher::Gitlab(_) => {
                 // TODO this unwrap can panic
                 let url = cli.clone().gitlab.unwrap().gitlab_url.clone().unwrap();
 
@@ -156,7 +163,7 @@ pub async fn rebuilder(
                         info!("published to gitlab");
                     }
                     Err(e) => {
-                        error!("failed publishing to gitlab");
+                        error!("failed publishing to gitlab: {e}");
                         // TODO how do i handle this case and give feedback?
                         // a user will just wait indefinetly for the comment
                     }
@@ -166,10 +173,15 @@ pub async fn rebuilder(
 
         // move just finished report from todo into history
         {
-            history_list.lock().unwrap().add_one_report(&report_request);
+            let mut history = history_list.lock().unwrap();
+            history.add(report_request.clone().into());
+            history
+                .save(&cli.savefile_history_path)
+                .expect("saving history");
 
             let mut list = shared_reports_list.lock().unwrap();
             list.remove_one_report(report_request.clone());
+            list.save(&cli.savefile_path).expect("saving list");
             info!("done with {}", report_request.store_derivation);
         }
         report_request
