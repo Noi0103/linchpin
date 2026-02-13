@@ -20,6 +20,7 @@ use std::env;
 use std::fs;
 use std::net::SocketAddr;
 use std::os::unix::net::UnixStream;
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::thread;
 
@@ -55,16 +56,22 @@ async fn main() -> Result<(), Error> {
     info!("hello world");
 
     // get store derivation via result symlink
-    let store_output_path = fs::read_link("result")?;
-    info!("using result symlink");
+    let store_derivations: Vec<String>;
+    if cli.derivation.is_none() {
+        let store_output_path = fs::read_link("result")?;
+        info!("using result symlink");
 
-    let store_output_path_str = store_output_path.to_str().unwrap();
-    info!("output store path {store_output_path_str}");
+        let store_output_path_str = store_output_path.to_str().unwrap();
+        info!("output store path {store_output_path_str}");
 
-    let store_derivations = store
-        .query_valid_derivers(store_output_path_str)
-        .result()
-        .await?;
+        store_derivations = store
+            .query_valid_derivers(store_output_path_str)
+            .result()
+            .await?;
+    } else {
+        store_derivations = vec![cli.derivation.unwrap().to_str().unwrap().into()];
+    }
+
     info!("deriver store paths {:?}", store_derivations);
 
     // get all build closure derivation paths
@@ -241,5 +248,8 @@ struct Cli {
     // publisher
     #[arg(long, default_value_t = false, conflicts_with = "cli")]
     pub gitlab: bool,
-    // optional: store derivation path
+
+    /// derivation to use instead of the result symlink
+    #[arg(short, long)]
+    pub derivation: Option<PathBuf>,
 }
