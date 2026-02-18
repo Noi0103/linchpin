@@ -115,13 +115,29 @@ pub async fn rebuilder(
         let mut report_request = report_request.unwrap();
         info!("doing: {}", report_request.store_derivation);
 
+        for closure_element in &mut report_request.store_derivation_closure {
+            match closure_element {
+                ClosureElement::Derivation(derivation) => {
+                    match database.lookup_store_derivation(derivation.to_string()) {
+                        Ok(Some(lookup_derivation)) => {
+                            *closure_element = ClosureElement::Derivation(lookup_derivation);
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            error!("lookup error: {e}")
+                        }
+                    }
+                }
+                ClosureElement::Other(_) => {}
+            }
+        }
+
         // lookup what needs to be built (i.e. cli.max_rebuilds > db_write)
         // rebuild and update db
         for closure_element in &mut report_request.store_derivation_closure {
             //TODO simultaneous builds feature is missing
             match closure_element {
                 ClosureElement::Derivation(derivation) => {
-                    // TODO do these paths properly
                     if derivation.db_write_count < Some(cli.max_rebuild_tries)
                         && derivation.state != Some(DerivationState::Reproducible)
                     {

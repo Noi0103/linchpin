@@ -110,10 +110,10 @@ impl ReportRequest {
         for index in 0..self.store_derivation_closure.len() {
             match &self.store_derivation_closure[index] {
                 ClosureElement::Derivation(derivation) => {
-                    let mut lookup = database
+                    let lookup = database
                         .lookup_store_derivation(derivation.clone().into())
                         .expect("lookup in database failed");
-                    if let Some(lookup_derivation) = lookup.pop() {
+                    if let Some(lookup_derivation) = lookup {
                         self.store_derivation_closure[index] =
                             ClosureElement::Derivation(lookup_derivation);
                     }
@@ -136,15 +136,15 @@ impl ReportRequest {
                 ClosureElement::Derivation(drv) => {
                     let derivation_string = drv.file_path.display().to_string();
                     let lookup = database.lookup_store_derivation(derivation_string)?;
-                    if !lookup.is_empty() {
+                    if lookup.is_some() {
                         debug!("no entry found {drv}");
                         untested.push(drv);
                     }
-                    for elem in lookup {
+                    while let Some(ref elem) = lookup {
                         match elem.state {
                             Some(DerivationState::BuildError) => {
                                 debug!("lookup found with BuildError: {elem}");
-                                untested.push(elem);
+                                untested.push(elem.clone());
                             }
                             Some(DerivationState::NonReproducible) => {
                                 debug!("lookup found with NonReproducible: {elem}");
@@ -157,7 +157,7 @@ impl ReportRequest {
                             }
                             Some(DerivationState::NotTested) => {
                                 debug!("lookup found with NotTested: {elem}");
-                                untested.push(elem);
+                                untested.push(elem.clone());
                             }
                             Some(DerivationState::Reproducible) => {
                                 debug!("lookup found with Reproducible: {elem}");
@@ -165,7 +165,7 @@ impl ReportRequest {
                             }
                             None => {
                                 debug!("found entry missing a state value: {elem}");
-                                untested.push(elem);
+                                untested.push(elem.clone());
                             }
                         }
                     }

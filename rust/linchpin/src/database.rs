@@ -6,8 +6,6 @@ use log::debug;
 use rusqlite::Connection;
 
 use crate::nix_derivation;
-use crate::nix_derivation::Derivation;
-use crate::nix_derivation::DerivationState;
 
 #[derive(Clone, Debug)]
 pub struct Database {
@@ -60,7 +58,7 @@ impl Database {
     pub fn lookup_store_derivation(
         &self,
         store_derivation_path: String,
-    ) -> Result<Vec<nix_derivation::Derivation>, rusqlite::Error> {
+    ) -> Result<Option<nix_derivation::Derivation>, rusqlite::Error> {
         let conn = Connection::open(&self.db_path)?;
         conn.busy_timeout(time::Duration::new(60, 0))
             .expect("failed to set sqlite busy timeout");
@@ -79,7 +77,15 @@ impl Database {
                 Ok(d)
             })?
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(result)
+
+        if result.is_empty() {
+            Ok(None)
+        } else if result.len() == 1 {
+            // SAFETY: checked above if
+            Ok(Some(result.first().unwrap().clone()))
+        } else {
+            panic!("db keys look corrupted");
+        }
     }
 
     /// inserted values: store_derivation TEXT PRIMARY KEY, store_derivation_state TEXT, error_reason TEXT,
@@ -105,40 +111,6 @@ impl Database {
             rusqlite::params![entry.file_path.to_str().unwrap(), entry.state, error_reason],
         )?;
         Ok(())
-    }
-
-    /// database lookups for every derivation in the list
-    pub fn collect_report_results(
-        &self,
-        derivations_from_closure: Vec<nix_derivation::Derivation>,
-    ) -> Vec<nix_derivation::Derivation> {
-        // collect all new lookup entries and form report
-        let mut lookup_sum: Vec<nix_derivation::Derivation> = vec![];
-
-        for element in derivations_from_closure.clone() {
-            let lookup: Vec<nix_derivation::Derivation> = self
-                .lookup_store_derivation(element.file_path.to_str().unwrap().to_string())
-                .expect("sqlite lookup error");
-            match lookup.is_empty() {
-                true => {
-                    lookup_sum.push(Derivation {
-                        file_path: element.file_path.clone(),
-                        state: Some(DerivationState::NotTested),
-                        error_reason: element.error_reason.clone(),
-                        db_write_count: element.db_write_count,
-                        job_toplevel: element.job_toplevel.clone(),
-                    });
-                }
-                false => {
-                    // lookup always returns a vector even if only one entry is found
-                    for lookup_entry in lookup {
-                        lookup_sum.push(lookup_entry);
-                    }
-                }
-            }
-        }
-
-        lookup_sum
     }
 }
 
@@ -194,8 +166,8 @@ impl rusqlite::types::FromSql for nix_derivation::BuildError {
 #[cfg(test)]
 mod tests {
     use crate::nix_derivation::BuildError;
+    use crate::nix_derivation::DerivationState;
 
-    use super::*;
     use rusqlite::types::{FromSql, ToSql, ToSqlOutput, ValueRef};
 
     #[test]
