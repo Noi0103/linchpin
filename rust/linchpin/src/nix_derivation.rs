@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::database::Database;
 
-/// determinsim state of the documented build inside the derivation
+/// determinism of the last documented build
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub enum DerivationState {
     // initial build failed for some reason
@@ -21,7 +21,7 @@ pub enum DerivationState {
 }
 
 /// to make distinctions between other general errors and known errors
-/// such as http error, hash mismatch that prevent a build
+/// such as http error, hash mismatch that prevent to even try a build
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub enum BuildError {
     None,
@@ -42,11 +42,13 @@ pub struct Derivation {
     // pub last_modified: Option<?>
     pub job_toplevel: Option<Vec<JobToplevel>>,
 }
+
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct JobToplevel {
     pub job: String,
     pub toplevels: Vec<String>,
 }
+
 impl TryFrom<String> for Derivation {
     type Error = Error;
     fn try_from(string: String) -> Result<Derivation> {

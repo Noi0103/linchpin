@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::{Context, Result};
 use clap::Parser;
 use libsystemd::daemon::{notify, watchdog_enabled, NotifyState};
-use tracing::{info, Level};
+use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
 use linchpin::cli::Cli;
@@ -15,8 +15,6 @@ use linchpin::report_request_list::ReportRequestList;
 #[cfg(target_has_atomic = "ptr")]
 #[tokio::main]
 async fn main() -> Result<()> {
-    // sort out args stuff
-
     use linchpin::initialize_linchpin;
 
     let cli = Cli::parse();
@@ -34,80 +32,6 @@ async fn main() -> Result<()> {
 
     // Log messages from the log crate as well.
     tracing_log::LogTracer::init()?;
-
-    info!("hello world");
-
-    // TBD
-    /*
-        let report_request = ReportRequest {
-            store_derivation: String::from(
-                "/nix/store/dgs88rrngn5kncv2b3zapp200k3dc0fk-getclosure.drv",
-            )
-            .try_into()
-            .expect("2"),
-            store_derivation_closure: vec![
-                ClosureElement::Derivation(
-                    String::from("/nix/store/dgs88rrngn5kncv2b3zapp200k3dc0fk-getclosure.drv")
-                        .try_into()
-                        .expect("2"),
-                ),
-                ClosureElement::Other(String::from(
-                    "/nix/store/001gp43bjqzx60cg345n2slzg7131za8-nix-nss-open-files.patch",
-                )),
-            ],
-            publisher_data: Publisher::Gitlab(PublisherMetadataGitlab {
-                ci_merge_request_project_id: "1".to_string(),
-                ci_merge_request_iid: "1".to_string(),
-                ci_commit_sha: "1".to_string(),
-                ci_job_name: "1".to_string(),
-                ci_pipeline_id: "1".to_string(),
-            }),
-        };
-
-        let mut list: ReportRequestList = ReportRequestList::new();
-        list.add_one_report(&report_request);
-
-        info!("{}", serde_json::to_string_pretty(&list).unwrap());
-
-        info!("{}", serde_json::to_string_pretty(&report_request).unwrap());
-
-        let json = String::from(
-            r#"
-    {
-      "store_derivation": {
-        "file_path": "/nix/store/dgs88rrngn5kncv2b3zapp200k3dc0fk-getclosure.drv",
-        "state": null,
-        "error_reason": null,
-        "db_write_count": null,
-        "job_toplevel": null
-      },
-      "store_derivation_closure": [
-        {
-          "file_path": "/nix/store/dgs88rrngn5kncv2b3zapp200k3dc0fk-getclosure.drv",
-          "state": null,
-          "error_reason": null,
-          "db_write_count": null,
-          "job_toplevel": null
-        },
-        "/nix/store/001gp43bjqzx60cg345n2slzg7131za8-nix-nss-open-files.patch"
-      ],
-      "publisher_data": {
-        "publisher": "Gitlab",
-        "value": {
-          "ci_merge_request_project_id": "1",
-          "ci_merge_request_iid": "1",
-          "ci_commit_sha": "1",
-          "ci_job_name": "1",
-          "ci_pipeline_id": "1"
-        }
-      }
-    }
-        "#,
-        );
-        debug!("testing parse a report_request next");
-        let request: ReportRequest = serde_json::from_str(&json).unwrap();
-        debug!("request parsed: {:#?}", request);
-    */
 
     // tracking object what reports are ongoing and waiting
     let shared_reports_list = Arc::new(Mutex::new(ReportRequestList::new()));

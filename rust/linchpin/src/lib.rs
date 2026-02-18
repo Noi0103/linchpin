@@ -20,8 +20,6 @@ pub mod server;
 /// functions to make message body and interact with gitlab api
 pub mod gitlab;
 
-pub mod publisher;
-
 pub mod cli;
 pub mod report_request;
 pub mod report_request_history;
@@ -87,14 +85,7 @@ pub async fn rebuilder(
     history: Arc<Mutex<ReportRequestHistoryList>>,
     database: Database,
 ) {
-    info!("HELLO WORLD REBUILDER");
-
     // TODO https://docs.rs/tokio/latest/tokio/sync/mpsc/
-
-    // TBD
-    //tokio::time::sleep(std::time::Duration::from_secs(20)).await;
-
-    //TODO have data modeled better and receiving working better before touching this stuff
 
     loop {
         // mpsc let this wait until message
@@ -115,6 +106,7 @@ pub async fn rebuilder(
         let mut report_request = report_request.unwrap();
         info!("doing: {}", report_request.store_derivation);
 
+        // do database lookup and if found take the state to memory
         for closure_element in &mut report_request.store_derivation_closure {
             match closure_element {
                 ClosureElement::Derivation(derivation) => {
@@ -135,8 +127,7 @@ pub async fn rebuilder(
             }
         }
 
-        // lookup what needs to be built (i.e. cli.max_rebuilds > db_write)
-        // rebuild and update db
+        // if necessary rebuild and update db
         for closure_element in &mut report_request.store_derivation_closure {
             //TODO simultaneous builds feature is missing
             match closure_element {
@@ -160,6 +151,7 @@ pub async fn rebuilder(
                 ClosureElement::Other(_) => {}
             }
         }
+
         // publish results
         let history_entry = history.lock().unwrap().try_find(&report_request);
         match history_entry {

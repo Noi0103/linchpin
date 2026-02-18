@@ -1,8 +1,3 @@
-// https://serde.rs/enum-representations.html
-// TODO externally tagged (new multipart), adjacently tagged (type-value pair),
-
-// TODO history
-
 use anyhow::Error;
 use anyhow::Result;
 use log::debug;

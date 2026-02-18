@@ -38,8 +38,6 @@ impl ReportRequestHistoryList {
             history_entries: VecDeque::new(),
         }
     }
-    //TODO some sort of query through it
-    // fn find(self, derivation: Derivation)->Result<ReportRequest, Error> {todo!()}
 
     pub fn add(&mut self, entry: ReportRequestHistoryEntry) {
         if !self.history_entries.contains(&entry) {
@@ -93,10 +91,10 @@ impl ReportRequestHistoryList {
         None
     }
 
-    /// clear all of history
+    /// TODO clear all of history
     pub fn reset(self, _path: PathBuf) -> Result<()> {
-        // clear local
-        // clear history
+        // clear memory
+        // clear file
         todo!()
     }
 }

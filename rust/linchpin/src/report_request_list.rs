@@ -30,6 +30,7 @@ impl ReportRequestList {
             report_requests: VecDeque::new(),
         }
     }
+
     pub fn add_one_report(&mut self, report_request: &ReportRequest) {
         if !self.report_requests.contains(report_request) {
             self.report_requests.push_back(report_request.clone());
@@ -40,13 +41,16 @@ impl ReportRequestList {
             );
         }
     }
+
     pub fn get_one_report(&self) -> Option<ReportRequest> {
         self.report_requests.front().cloned()
     }
+
     pub fn remove_one_report(&mut self, report_request: ReportRequest) {
         self.report_requests
             .retain(|x| x.store_derivation != report_request.store_derivation);
     }
+
     pub fn save(&self, path: &PathBuf) -> Result<(), Error> {
         let json: String =
             serde_json::to_string(&self.report_requests).expect("parse to json-string failed");
@@ -57,6 +61,7 @@ impl ReportRequestList {
         );
         Ok(())
     }
+
     pub fn load(&mut self, path: PathBuf) -> Result<(), Error> {
         let data: Vec<u8> = std::fs::read(path)?;
         let mut loaded: VecDeque<ReportRequest> = serde_json::from_slice(&data)
@@ -71,6 +76,7 @@ impl ReportRequestList {
         );
         Ok(())
     }
+
     pub fn load_and_lookup(&mut self, path: PathBuf, database: &Database) -> Result<()> {
         self.load(path.clone())?;
         for index in 0..self.report_requests.len() {
@@ -78,9 +84,11 @@ impl ReportRequestList {
         }
         Ok(())
     }
+
     pub fn len(&self) -> usize {
         self.report_requests.len()
     }
+
     pub fn is_empty(&self) -> bool {
         self.report_requests.is_empty()
     }

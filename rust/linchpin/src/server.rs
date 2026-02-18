@@ -4,9 +4,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 
-//use tokio::sync::Mutex;
-//use tokio::sync::MutexGuard;
-
 use axum::{
     body::Bytes,
     extract::{Multipart, State},
@@ -23,7 +20,7 @@ use crate::report_request_list::ReportRequestList;
 use log::debug;
 use log::info;
 
-/// axum's Router can only take one with_state()
+/// axum's Router can only take one with_state() argument
 #[derive(Debug, Clone)]
 pub struct AppState {
     /// the live list of reports shared between server and rebuilder thread
@@ -44,8 +41,6 @@ pub struct MethodLabels {
 
 /// constructing the REST server application in the thread by adding sqlite database, socket address, a with rebuilder shared state and REST endpoints
 pub async fn server(cli: cli::Cli, shared_reports_list: Arc<Mutex<ReportRequestList>>) {
-    info!("HELLO WORLD SERVER");
-
     let socket_addr: std::net::SocketAddr = cli.socket_address;
 
     let app_state = AppState {
