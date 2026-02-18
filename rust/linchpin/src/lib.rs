@@ -120,9 +120,12 @@ pub async fn rebuilder(
                 ClosureElement::Derivation(derivation) => {
                     match database.lookup_store_derivation(derivation.to_string()) {
                         Ok(Some(lookup_derivation)) => {
+                            debug!("db hit: {derivation}");
                             *closure_element = ClosureElement::Derivation(lookup_derivation);
                         }
-                        Ok(None) => {}
+                        Ok(None) => {
+                            debug!("db miss: {derivation}");
+                        }
                         Err(e) => {
                             error!("lookup error: {e}")
                         }

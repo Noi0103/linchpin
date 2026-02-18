@@ -150,7 +150,7 @@ pub async fn handle_report(
         .expect("failed saving");
 
     info!(
-        "received closure paths for: /nix/store/{}",
+        "received closure paths for: {}",
         &report_request.store_derivation
     );
 

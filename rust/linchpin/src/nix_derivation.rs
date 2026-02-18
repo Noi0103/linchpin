@@ -267,7 +267,7 @@ impl std::fmt::Display for Derivation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // SAFETY: initializing a derivation requires path ending on .drv
         let string = String::from(self.file_path.file_name().unwrap().to_str().unwrap());
-        write!(f, "{string}")
+        write!(f, "/nix/store/{string}")
     }
 }
 

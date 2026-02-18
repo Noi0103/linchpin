@@ -177,9 +177,10 @@ impl ReportRequest {
     }
 
     pub fn print_summary(&self) {
-        info!(
-            "full closure count: {}",
-            self.store_derivation_closure.len()
+        let mut report = format!("\nREPORT IS READY FOR {}\n", self.store_derivation);
+        report = format!(
+            "{report}full closure count: {}\n",
+            self.store_derivation_closure.len(),
         );
 
         // all derivations count
@@ -195,7 +196,7 @@ impl ReportRequest {
                 }
             })
             .collect();
-        info!("derivation count {}", derivations.len());
+        report = format!("{report}derivation count {}\n", derivations.len());
 
         // reproducible derivations count
         let derivations_reproducible: Vec<Derivation> = derivations
@@ -206,7 +207,10 @@ impl ReportRequest {
             })
             .cloned()
             .collect();
-        info!("reproducible count {}", derivations_reproducible.len());
+        report = format!(
+            "{report}reproducible count {}\n",
+            derivations_reproducible.len()
+        );
 
         // non reproducible derivations count
         let derivations_non_reproducible: Vec<Derivation> = derivations
@@ -219,9 +223,11 @@ impl ReportRequest {
             })
             .cloned()
             .collect();
-        info!(
-            "non-reproducible count {}",
+        report = format!(
+            "{report}non-reproducible count {}\n",
             derivations_non_reproducible.len()
         );
+
+        info!("{report}");
     }
 }
