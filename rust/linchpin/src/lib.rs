@@ -84,7 +84,7 @@ pub fn initialize_linchpin(
 pub async fn rebuilder(
     cli: Cli,
     shared_reports_list: Arc<Mutex<ReportRequestList>>,
-    history_list: Arc<Mutex<ReportRequestHistoryList>>,
+    history: Arc<Mutex<ReportRequestHistoryList>>,
     database: Database,
 ) {
     info!("HELLO WORLD REBUILDER");
@@ -142,6 +142,16 @@ pub async fn rebuilder(
             }
         }
         // publish results
+        let history_entry = history.lock().unwrap().try_find(&report_request);
+        match history_entry {
+            Some(_) => {
+                info!("this report_request is found in the history");
+            }
+            None => {
+                debug!("this toplevel derivation is not yet in the history");
+            }
+        };
+
         match &report_request.publisher_data {
             Publisher::Cli() => {
                 info!("publishing to cli:");
@@ -157,7 +167,7 @@ pub async fn rebuilder(
                 )
                 .expect("utf8 to string");
                 let gitlab = Gitlab { url, token };
-                // TODO check history entries decide: update or publish
+
                 match gitlab.publish_report(&report_request).await {
                     Ok(_) => {
                         info!("published to gitlab");
@@ -171,11 +181,12 @@ pub async fn rebuilder(
             }
         }
 
-        // move just finished report from todo into history
+        // move just finished report from (todo) list into history
         {
-            let mut history = history_list.lock().unwrap();
-            history.add(report_request.clone().into());
+            history.lock().unwrap().add(report_request.clone().into());
             history
+                .lock()
+                .unwrap()
                 .save(&cli.savefile_history_path)
                 .expect("saving history");
 
