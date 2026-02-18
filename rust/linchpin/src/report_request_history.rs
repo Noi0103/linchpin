@@ -84,6 +84,15 @@ impl ReportRequestHistoryList {
         Ok(())
     }
 
+    pub fn try_find(&self, report_request: &ReportRequest) -> Option<ReportRequestHistoryEntry> {
+        for entry in &self.history_entries {
+            if entry.report_request == *report_request {
+                return Some(entry.clone());
+            }
+        }
+        None
+    }
+
     /// clear all of history
     pub fn reset(self, _path: PathBuf) -> Result<()> {
         // clear local
