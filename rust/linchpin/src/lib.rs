@@ -2,6 +2,7 @@ use anyhow::Result;
 use log::debug;
 use log::error;
 use log::info;
+use log::trace;
 use std::fs;
 use std::fs::create_dir_all;
 use std::sync::Arc;
@@ -56,6 +57,7 @@ pub fn initialize_linchpin(
 
     let list = shared_reports_list.lock().unwrap();
     // if cli then load running report list else clear gc roots
+    // TODO catch: if no file exists
     if cli.persistent_reports {
         debug!("loading last active report_request_list");
         list.clone()
@@ -128,29 +130,63 @@ pub async fn rebuilder(
         }
 
         // if necessary rebuild and update db
+        use std::sync::Arc;
+        use tokio::sync::Semaphore;
+        use tokio::task;
+
+        let semaphore = Arc::new(Semaphore::new(cli.simultaneous_builds));
+        let mut jhs = Vec::new();
         for closure_element in &mut report_request.store_derivation_closure {
-            //TODO simultaneous builds feature is missing
-            match closure_element {
-                ClosureElement::Derivation(derivation) => {
-                    if derivation.db_write_count < Some(cli.max_rebuild_tries)
-                        && derivation.state != Some(DerivationState::Reproducible)
-                    {
-                        match derivation
-                            .build_rebuild_upsert(&database, &cli.nix_store)
-                            .await
-                        {
-                            Ok(_) => {
-                                debug!("successfully rebuilt {derivation}")
+            let permit = semaphore.clone().acquire_owned().await.unwrap();
+
+            let database_clone = database.clone();
+            let nix_store_clone = cli.nix_store.clone();
+            let closure_element_clone = closure_element.clone();
+
+            let jh = task::spawn(async move {
+                trace!("spawned task");
+                let closure_element = match closure_element_clone {
+                    ClosureElement::Derivation(derivation) => {
+                        trace!("doing a derivation");
+                        // do stuff for every derivation
+                        let tmp = match derivation.clone().state {
+                            Some(DerivationState::Reproducible) => {
+                                trace!("derivation is reproducible");
+                                derivation
                             }
-                            Err(e) => {
-                                error!("rebuilding failed {derivation} {e}")
+                            Some(_) => {
+                                trace!("derivation is not reproducible");
+                                derivation
+                                    .build_rebuild_upsert(&database_clone, &nix_store_clone)
+                                    .await
+                                    .expect("build failed")
                             }
-                        }
+                            None => {
+                                trace!("derivation is unset state");
+                                derivation
+                                    .build_rebuild_upsert(&database_clone, &nix_store_clone)
+                                    .await
+                                    .expect("build failed")
+                            }
+                        };
+                        ClosureElement::Derivation(tmp)
                     }
-                }
-                ClosureElement::Other(_) => {}
-            }
+                    ClosureElement::Other(other) => {
+                        trace!("not doing a derivation");
+                        ClosureElement::Other(other)
+                    }
+                };
+                drop(permit);
+                closure_element
+            });
+            jhs.push(jh);
         }
+        let mut responses = Vec::new();
+        for jh in jhs {
+            let response = jh.await.unwrap();
+            responses.push(response);
+        }
+        report_request.store_derivation_closure = responses;
 
         // publish results
         let history_entry = history.lock().unwrap().try_find(&report_request);

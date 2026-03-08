@@ -156,15 +156,18 @@ impl Derivation {
 
     /// helper function to do the initial `nix-build``, the `nix-build --check`` and the sqlite database upsert
     pub async fn build_rebuild_upsert(
-        &mut self,
+        &self,
         database: &Database,
         nix_store: &str,
-    ) -> Result<()> {
+    ) -> Result<Derivation> {
         info!("building {self}");
         let result = self.nix_build_remote(nix_store.to_owned()).await;
+
+        let mut derivation: Derivation;
+
         // initial build failed
         if !result.status.success() {
-            let db_entry = Derivation {
+            derivation = Derivation {
                 file_path: self.file_path.clone(),
                 state: Some(DerivationState::BuildError),
                 error_reason: None,
@@ -172,30 +175,30 @@ impl Derivation {
                 job_toplevel: None,
             };
             database
-                .upsert_store_derivation(db_entry)
+                .upsert_store_derivation(derivation)
                 .expect("sqlite update error");
             return Err(anyhow!("initial build failed"));
         };
 
         info!("rebuilding: {self}");
         let result = self.nix_build_check_remote(nix_store).await;
-
+        derivation = self.clone();
         if result.status.success() {
             info!("built reproducible");
-            self.state = Some(DerivationState::Reproducible);
+            derivation.state = Some(DerivationState::Reproducible);
         } else {
             info!("non reproducible (or build error)");
             let stderr: String = String::from_utf8_lossy(&result.stderr).to_string();
             let build_error: BuildError = parse_nix_build_error(stderr);
-            self.state = Some(DerivationState::NonReproducible);
-            self.error_reason = Some(build_error);
+            derivation.state = Some(DerivationState::NonReproducible);
+            derivation.error_reason = Some(build_error);
         }
 
         database
             .upsert_store_derivation(self.clone())
             .expect("sqlite update error");
 
-        Ok(())
+        Ok(derivation)
     }
 }
 
