@@ -55,13 +55,12 @@ pub fn initialize_linchpin(
         create_dir_all(cli.savefile_history_path.parent().unwrap())?;
     }
 
-    let list = shared_reports_list.lock().unwrap();
+    let mut list = shared_reports_list.lock().unwrap();
     // if cli then load running report list else clear gc roots
     // TODO catch: if no file exists
     if cli.persistent_reports {
         debug!("loading last active report_request_list");
-        list.clone()
-            .load_and_lookup(cli.savefile_path.clone(), database)?;
+        list.load_and_lookup(cli.savefile_path.clone(), database)?;
     } else {
         list.save(&cli.savefile_path)?;
         reset_gc_root(&cli.gc_links_dir)?;
