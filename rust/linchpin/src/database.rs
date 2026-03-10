@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::time;
 
 use log::debug;
+use log::trace;
 use rusqlite::Connection;
 
 use crate::nix_derivation;
@@ -93,6 +94,11 @@ impl Database {
         &self,
         entry: nix_derivation::Derivation,
     ) -> Result<(), rusqlite::Error> {
+        trace!(
+            "database upsert for {:?} with state {:?}",
+            entry.file_path,
+            entry.state
+        );
         let conn = rusqlite::Connection::open(&self.db_path)?;
         conn.busy_timeout(time::Duration::new(60, 0))
             .expect("failed to set sqlite busy timeout");

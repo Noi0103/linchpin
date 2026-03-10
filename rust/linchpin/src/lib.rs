@@ -3,6 +3,7 @@ use log::debug;
 use log::error;
 use log::info;
 use log::trace;
+use log::warn;
 use std::fs;
 use std::fs::create_dir_all;
 use std::sync::Arc;
@@ -100,7 +101,6 @@ pub async fn rebuilder(
         }
 
         if report_request.is_none() {
-            //debug!("no report request");
             continue;
         }
 
@@ -108,24 +108,54 @@ pub async fn rebuilder(
         info!("doing: {}", report_request.store_derivation);
 
         // do database lookup and if found take the state to memory
+        let mut derivations = 0;
+        let mut non_derivations = 0;
+
+        let mut db_hits = 0;
+        let mut db_hits_reproducible = 0;
+        let mut db_misses = 0;
+        let mut db_error = 0;
+
         for closure_element in &mut report_request.store_derivation_closure {
             match closure_element {
                 ClosureElement::Derivation(derivation) => {
+                    derivations += 1;
                     match database.lookup_store_derivation(derivation.to_string()) {
                         Ok(Some(lookup_derivation)) => {
-                            debug!("db hit: {derivation}");
+                            trace!("db hit: {derivation}");
+
+                            if lookup_derivation.state == Some(DerivationState::Reproducible) {
+                                db_hits_reproducible += 1;
+                            }
+                            db_hits += 1;
+
                             *closure_element = ClosureElement::Derivation(lookup_derivation);
                         }
                         Ok(None) => {
-                            debug!("db miss: {derivation}");
+                            trace!("db miss: {derivation}");
+                            db_misses += 1;
                         }
                         Err(e) => {
-                            error!("lookup error: {e}")
+                            warn!("lookup error: {e}");
+                            db_error += 1;
                         }
                     }
                 }
-                ClosureElement::Other(_) => {}
+                ClosureElement::Other(_) => {
+                    non_derivations += 1;
+                }
             }
+        }
+
+        info!("derivation count is {derivations}");
+        info!("non_derivation count is {non_derivations}");
+
+        info!("db hit count is {db_hits}");
+        info!("db miss count is {db_misses}");
+        info!("will not rebuild {db_hits_reproducible} as reproducible marked db hits");
+
+        if db_error > 0 {
+            warn!("db lookup errors: {db_error}");
         }
 
         // if necessary rebuild and update db
@@ -143,35 +173,23 @@ pub async fn rebuilder(
             let closure_element_clone = closure_element.clone();
 
             let jh = task::spawn(async move {
-                trace!("spawned task");
+                trace!("spawned new task");
                 let closure_element = match closure_element_clone {
                     ClosureElement::Derivation(derivation) => {
-                        trace!("doing a derivation");
+                        trace!("looking at a derivation: {derivation}");
                         // do stuff for every derivation
                         let tmp = match derivation.clone().state {
-                            Some(DerivationState::Reproducible) => {
-                                trace!("derivation is reproducible");
-                                derivation
-                            }
-                            Some(_) => {
-                                trace!("derivation is not reproducible");
-                                derivation
-                                    .build_rebuild_upsert(&database_clone, &nix_store_clone)
-                                    .await
-                                    .expect("build failed")
-                            }
-                            None => {
-                                trace!("derivation is unset state");
-                                derivation
-                                    .build_rebuild_upsert(&database_clone, &nix_store_clone)
-                                    .await
-                                    .expect("build failed")
-                            }
+                            Some(DerivationState::Reproducible) => derivation,
+                            _ => derivation
+                                .build_rebuild_upsert(&database_clone, &nix_store_clone)
+                                .await
+                                .expect("build_rebuild_upsert failed"),
                         };
+                        trace!("done with derivation: {tmp}");
                         ClosureElement::Derivation(tmp)
                     }
                     ClosureElement::Other(other) => {
-                        trace!("not doing a derivation");
+                        trace!("not a derivation: {other}");
                         ClosureElement::Other(other)
                     }
                 };

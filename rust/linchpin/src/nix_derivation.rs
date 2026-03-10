@@ -2,9 +2,7 @@ use std::path::{Path, PathBuf};
 use std::{fs, io, process};
 
 use anyhow::{anyhow, Error, Ok, Result};
-use log::debug;
-use log::info;
-use log::warn;
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 
 use crate::database::Database;
@@ -29,7 +27,7 @@ pub enum BuildError {
     NonDeterministic,
     HTTPError,
     HashMismatch,
-    //InitialBuildError
+    InitialBuildError,
 }
 
 /// store derivation representation
@@ -160,34 +158,29 @@ impl Derivation {
         database: &Database,
         nix_store: &str,
     ) -> Result<Derivation> {
-        info!("building {self}");
+        debug!("building {self}");
+        let mut derivation = self.clone();
         let result = self.nix_build_remote(nix_store.to_owned()).await;
-
-        let mut derivation: Derivation;
 
         // initial build failed
         if !result.status.success() {
-            derivation = Derivation {
-                file_path: self.file_path.clone(),
-                state: Some(DerivationState::BuildError),
-                error_reason: None,
-                db_write_count: None,
-                job_toplevel: None,
-            };
+            derivation.state = Some(DerivationState::BuildError);
+            derivation.error_reason = Some(BuildError::InitialBuildError);
+
             database
                 .upsert_store_derivation(derivation)
                 .expect("sqlite update error");
             return Err(anyhow!("initial build failed"));
         };
 
-        info!("rebuilding: {self}");
+        debug!("rebuilding: {self}");
         let result = self.nix_build_check_remote(nix_store).await;
-        derivation = self.clone();
+
         if result.status.success() {
-            info!("built reproducible");
+            debug!("seems reproducible: {self}");
             derivation.state = Some(DerivationState::Reproducible);
         } else {
-            info!("non reproducible (or build error)");
+            debug!("is non-reproducible (or build error): {self}");
             let stderr: String = String::from_utf8_lossy(&result.stderr).to_string();
             let build_error: BuildError = parse_nix_build_error(stderr);
             derivation.state = Some(DerivationState::NonReproducible);
@@ -195,7 +188,7 @@ impl Derivation {
         }
 
         database
-            .upsert_store_derivation(self.clone())
+            .upsert_store_derivation(derivation.clone())
             .expect("sqlite update error");
 
         Ok(derivation)
@@ -263,6 +256,7 @@ impl std::fmt::Display for BuildError {
             BuildError::HTTPError => "HTTPError",
             BuildError::HashMismatch => "HashMismatch",
             BuildError::NonDeterministic => "NonDeterministic",
+            BuildError::InitialBuildError => "InitialBuildError",
         };
         write!(f, "{state_str}")
     }
