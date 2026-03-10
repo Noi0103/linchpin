@@ -48,7 +48,7 @@
           Filesystem path to store reports from the waitlist/queue. If persistent-reports option is set the content will be used to resume after restarting the service.
         '';
       };
-      gc-links-path = lib.mkOption {
+      gc-links-dir = lib.mkOption {
         type = lib.types.path;
         default = "${config.services.linchpin.dataDir}/gc-roots";
         example = "/var/lib/linchpin/gc-roots";
@@ -124,7 +124,7 @@
         Type = "exec";
         ExecStart = "${
           pkgs.callPackage ./packages/linchpin.nix { }
-        }/bin/linchpin --db-file ${config.services.linchpin.db-file} --socket-address ${config.services.linchpin.socket-ip}:${builtins.toString config.services.linchpin.port} --nix-store ${config.services.linchpin.nix-store} --gitlab-url ${config.services.linchpin.gitlab-url} --simultaneous-builds ${builtins.toString config.services.linchpin.simultaneous-builds} --gc-links-path ${config.services.linchpin.gc-links-path} ${lib.optionalString config.services.linchpin.persistent-reports "--persistent-reports"} --savefile-path ${config.services.linchpin.savefile-path} --savefile-history-path ${config.services.linchpin.savefile-history-path} --max-rebuild-tries ${builtins.toString config.services.linchpin.max-rebuild-tries}";
+        }/bin/linchpin --db-file ${config.services.linchpin.db-file} --socket-address ${config.services.linchpin.socket-ip}:${builtins.toString config.services.linchpin.port} --nix-store ${config.services.linchpin.nix-store} --gitlab-url ${config.services.linchpin.gitlab-url} --simultaneous-builds ${builtins.toString config.services.linchpin.simultaneous-builds} --gc-links-dir ${config.services.linchpin.gc-links-dir} ${lib.optionalString config.services.linchpin.persistent-reports "--persistent-reports"} --savefile-path ${config.services.linchpin.savefile-path} --savefile-history-path ${config.services.linchpin.savefile-history-path} --max-rebuild-tries ${builtins.toString config.services.linchpin.max-rebuild-tries}";
         WatchdogSec = "1min";
         Restart = "always";
         RestartSec = 20;
