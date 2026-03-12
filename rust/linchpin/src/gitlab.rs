@@ -42,6 +42,8 @@ pub struct PublisherMetadataGitlab {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct GitlabApiBody {
     body: String,
+    id: String,
+    merge_request_iid: String,
 }
 
 /// response json format from gitlab notes api
@@ -113,12 +115,14 @@ impl Gitlab {
         );
         let body: String = serde_json::to_string(&GitlabApiBody {
             body: Gitlab::to_markdown(request).to_string(),
+            id: project_id,
+            merge_request_iid: iid,
         })
         .expect("parse response json to string");
 
         match Client::new()
             .post(&url)
-            .header("PRIVATE-TOKEN", &self.token)
+            .header("PRIVATE-TOKEN", self.token.trim())
             .header("Content-Type", "application/json")
             .body(body.clone())
             .send()
