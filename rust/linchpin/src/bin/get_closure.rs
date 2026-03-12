@@ -5,6 +5,7 @@ use anyhow::{anyhow, Context, Error, Result};
 use clap::Parser;
 use log::debug;
 use log::error;
+use log::trace;
 use nix_daemon::nix::DaemonStore;
 use nix_daemon::Progress;
 use nix_daemon::Store;
@@ -163,7 +164,6 @@ async fn main() -> Result<(), Error> {
 
         match Client::new().post(&cli.url).multipart(form).send().await {
             Ok(response) => {
-                // TODO missing protocoll used by server and collecter
                 info!("api response raw: {:?}", response);
             }
             Err(e) => {
@@ -235,6 +235,7 @@ fn handle_gitlab() -> Result<PublisherMetadataGitlab> {
         ci_job_name: env::var("ci_job_name")?,
         ci_pipeline_id: env::var("ci_pipeline_id")?,
     };
+    trace!("collected meta: {:#?}", metadata);
 
     Ok(metadata)
 }
@@ -248,10 +249,12 @@ struct Cli {
     /// socket address the tracking server is listening on; e.g. 127.0.0.1:8080
     #[arg(short, long)]
     pub url: String,
-    // TODO make mututally exclusive
+
+    // publishers
+    /// publish report results to stdout
     #[arg(long, default_value_t = false, conflicts_with = "gitlab")]
     pub cli: bool,
-    // publisher
+    /// publish report results to gitlab, collect gitlab CI pipeline environment
     #[arg(long, default_value_t = false, conflicts_with = "cli")]
     pub gitlab: bool,
 
