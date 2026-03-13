@@ -9,7 +9,6 @@
   options = {
     services.linchpin = {
       enable = lib.mkEnableOption "enable tracking server";
-
       openFirewall = lib.mkEnableOption "open port in firewall";
       socket-ip = lib.mkOption {
         type = lib.types.str;
@@ -26,7 +25,6 @@
           Port to listen for rebuild information (http).
         '';
       };
-
       dataDir = lib.mkOption {
         type = lib.types.path;
         default = "/var/lib/linchpin";
@@ -64,7 +62,6 @@
           Filesystem path to store specifics from already posted reports. In case a singular pipeline has multiple reports requested the incomplete comments will be edited to prevent creating additional comments.
         '';
       };
-
       nix-store = lib.mkOption {
         type = lib.types.str;
         default = "ssh-ng://localhost";
@@ -76,23 +73,6 @@
           `nix-build /nix/store/j73r5pf6m6x0kc53czn353bk2k2hxcds-mesa-24.2.8.drv --check --max-jobs 0 --eval-store auto --store ssh-ng://remote-builder.internal`
         '';
       };
-      gitlab-url = lib.mkOption {
-        type = lib.types.str;
-        default = "";
-        example = "https://git.domain.com";
-        description = ''
-          Gitlab instance where the merge request comments with the test results will be posted on.
-        '';
-      };
-      gitlab-token-file = lib.mkOption {
-        type = lib.types.path;
-        default = "";
-        example = "/run/secrets/my-secret-gitlab-token";
-        description = ''
-          Gitlab token allowing to post merge request comments.
-        '';
-      };
-
       persistent-reports = lib.mkEnableOption "When restarting the service, resume the left over reports instead of doing a reset";
       simultaneous-builds = lib.mkOption {
         type = lib.types.int;
@@ -110,12 +90,31 @@
           How often a rebuild is done (on repeated reports) before taking the past test results at face value.
         '';
       };
+      gitlab = {
+        enable = lib.mkEnableOption "enable gitlab as publisher";
+        url = lib.mkOption {
+          type = lib.types.str;
+          default = "";
+          example = "https://git.domain.com";
+          description = ''
+            Gitlab instance where the merge request comments with the test results will be posted on.
+          '';
+        };
+        token-path = lib.mkOption {
+          type = lib.types.path;
+          default = "";
+          example = "/run/secrets/my-secret-gitlab-token";
+          description = ''
+            Gitlab token allowing to post merge request comments.
+          '';
+        };
+      };
     };
   };
   config = lib.mkIf config.services.linchpin.enable {
     systemd.services.linchpin = {
       enable = true;
-      description = "server side for tracking already rebuilt derivations";
+      description = "server side to rebuild derivations and record results";
       path = [
         pkgs.nix
       ];
@@ -124,11 +123,24 @@
         Type = "exec";
         ExecStart = "${
           pkgs.callPackage ./packages/linchpin.nix { }
-        }/bin/linchpin --db-file ${config.services.linchpin.db-file} --socket-address ${config.services.linchpin.socket-ip}:${builtins.toString config.services.linchpin.port} --nix-store ${config.services.linchpin.nix-store} --gitlab-url ${config.services.linchpin.gitlab-url} --simultaneous-builds ${builtins.toString config.services.linchpin.simultaneous-builds} --gc-links-dir ${config.services.linchpin.gc-links-dir} ${lib.optionalString config.services.linchpin.persistent-reports "--persistent-reports"} --savefile-path ${config.services.linchpin.savefile-path} --savefile-history-path ${config.services.linchpin.savefile-history-path} --max-rebuild-tries ${builtins.toString config.services.linchpin.max-rebuild-tries}";
+        }/bin/linchpin --db-file ${config.services.linchpin.db-file} \
+          --socket-address ${config.services.linchpin.socket-ip}:${builtins.toString config.services.linchpin.port} \
+          --nix-store ${config.services.linchpin.nix-store} \
+          --simultaneous-builds ${builtins.toString config.services.linchpin.simultaneous-builds} \
+          --gc-links-dir ${config.services.linchpin.gc-links-dir} \
+          ${lib.optionalString config.services.linchpin.persistent-reports "--persistent-reports"} \
+          --savefile-path ${config.services.linchpin.savefile-path} \
+          --savefile-history-path ${config.services.linchpin.savefile-history-path} \
+          --max-rebuild-tries ${builtins.toString config.services.linchpin.max-rebuild-tries}\
+          ${
+                    if config.services.linchpin.gitlab.enable then
+                      "--gitlab-url ${config.services.linchpin.gitlab.url} --gitlab-api-token-file ${config.services.linchpin.gitlab.token-path}"
+                    else
+                      ""
+                  }";
         WatchdogSec = "1min";
         Restart = "always";
         RestartSec = 20;
-        LoadCredential = [ "gitlab_token:${config.services.linchpin.gitlab-token-file}" ];
       };
       wantedBy = [ "multi-user.target" ];
     };
