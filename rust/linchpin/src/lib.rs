@@ -57,11 +57,16 @@ pub fn initialize_linchpin(
     }
 
     let mut list = shared_reports_list.lock().unwrap();
+
     // if cli then load running report list else clear gc roots
-    // TODO catch: if no file exists
     if cli.persistent_reports {
         debug!("loading last active report_request_list");
-        list.load_and_lookup(cli.savefile_path.clone(), database)?;
+        match list.load_and_lookup(cli.savefile_path.clone(), database) {
+            Ok(_) => {}
+            Err(e) => {
+                warn!("loading given savefile path failed: {}", e);
+            }
+        };
     } else {
         list.save(&cli.savefile_path)?;
         reset_gc_root(&cli.gc_links_dir)?;
@@ -71,7 +76,12 @@ pub fn initialize_linchpin(
     let mut history = shared_reports_history.lock().unwrap();
     if cli.savefile_history_path.exists() {
         debug!("loading history");
-        history.load(&cli.savefile_history_path)?;
+        match history.load(&cli.savefile_history_path) {
+            Ok(_) => {}
+            Err(e) => {
+                warn!("loading given history path failed: {}", e);
+            }
+        };
     } else {
         debug!("no history found");
         history.save(&cli.savefile_history_path)?;
