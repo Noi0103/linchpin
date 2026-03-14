@@ -233,11 +233,17 @@ pub async fn rebuilder(
             }
             Publisher::Gitlab(_) => {
                 // TODO this unwrap can panic
-                let url = cli.clone().gitlab.unwrap().gitlab_url.clone().unwrap();
+                let url = cli
+                    .clone()
+                    .gitlab
+                    .expect("gitlab is not available as a publisher")
+                    .gitlab_url
+                    .clone()
+                    .expect("gitlab is not available as a publisher");
 
                 let token: String = String::from_utf8(
                     fs::read(cli.clone().gitlab.unwrap().gitlab_api_token_file.unwrap())
-                        .expect("reading gitlab token"),
+                        .expect("reading gitlab token failed"),
                 )
                 .expect("utf8 to string");
                 let gitlab = Gitlab { url, token };
