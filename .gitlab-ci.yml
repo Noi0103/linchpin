@@ -8,6 +8,7 @@ workflow:
 stages:
   - check
   - build
+  - test
 
 variables:
   GIT_URL: "git@${CI_SERVER_HOST}:"
@@ -18,7 +19,7 @@ variables:
 
 default:
   tags:
-    - conrad
+    - nix
   before_script:
     - git config --global --add url."$HTTPS_URL".insteadOf "$GIT_URL"
     - git config --global --add url."$HTTPS_URL".insteadOf "$GIT_SSH_URL"
@@ -26,14 +27,15 @@ default:
 check:
   stage: check
   script:
-      - nix flake check
+      - nix-build default.nix --attr checks.pre-commit --no-out-link
 
 build:
   stage: build
   script:
-    - nix --print-build-logs build .#stable
-    - nix run .#getclosure 127.0.0.1:8080
-    - nix --print-build-logs build .#unstable
-    - nix run .#getclosure 127.0.0.1:8080
-    - nix --print-build-logs build .#default
-    - nix run .#getclosure 127.0.0.1:8080
+    - nix-build default.nix --attr packages.linchpin --no-out-link
+    - nix-build default.nix --attr packages.get_closure --no-out-link
+
+test:
+  stage: test
+  script:
+    - nix-build default.nix --attr checks.tests

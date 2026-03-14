@@ -1,14 +1,14 @@
 {
   config,
   lib,
+  packages,
   pkgs,
   ...
 }:
 {
   options = {
-    services.reproducibility-automation = {
+    services.linchpin = {
       enable = lib.mkEnableOption "enable tracking server";
-
       openFirewall = lib.mkEnableOption "open port in firewall";
       socket-ip = lib.mkOption {
         type = lib.types.str;
@@ -25,32 +25,31 @@
           Port to listen for rebuild information (http).
         '';
       };
-
       dataDir = lib.mkOption {
         type = lib.types.path;
-        default = "/var/lib/reproducibility-automation";
+        default = "/var/lib/linchpin";
         description = ''
           Parent Directory to derive other filesystem related options. You probably only need to edit this path if any at all.
         '';
       };
       db-file = lib.mkOption {
         type = lib.types.path;
-        default = "${config.services.reproducibility-automation.dataDir}/server.db";
+        default = "${config.services.linchpin.dataDir}/server.db";
         description = ''
           Filesystem path for a sqlite database storing a store derivations build reproducibility status.
         '';
       };
       savefile-path = lib.mkOption {
         type = lib.types.path;
-        default = "${config.services.reproducibility-automation.dataDir}/savefile.json";
+        default = "${config.services.linchpin.dataDir}/savefile.json";
         description = ''
           Filesystem path to store reports from the waitlist/queue. If persistent-reports option is set the content will be used to resume after restarting the service.
         '';
       };
-      gc-links-path = lib.mkOption {
+      gc-links-dir = lib.mkOption {
         type = lib.types.path;
-        default = "${config.services.reproducibility-automation.dataDir}/gc-roots";
-        example = "/var/lib/reproducibility-automation/gc-roots";
+        default = "${config.services.linchpin.dataDir}/gc-roots";
+        example = "/var/lib/linchpin/gc-roots";
         description = ''
           Filesystem path to a directory to create symlinks against store derivations. Protects needed store derivations against automated garbadge collection.
           Symlinks are removed upon test completion.
@@ -58,12 +57,11 @@
       };
       savefile-history-path = lib.mkOption {
         type = lib.types.path;
-        default = "${config.services.reproducibility-automation.dataDir}/comment-history.json";
+        default = "${config.services.linchpin.dataDir}/comment-history.json";
         description = ''
           Filesystem path to store specifics from already posted reports. In case a singular pipeline has multiple reports requested the incomplete comments will be edited to prevent creating additional comments.
         '';
       };
-
       nix-store = lib.mkOption {
         type = lib.types.str;
         default = "ssh-ng://localhost";
@@ -75,23 +73,6 @@
           `nix-build /nix/store/j73r5pf6m6x0kc53czn353bk2k2hxcds-mesa-24.2.8.drv --check --max-jobs 0 --eval-store auto --store ssh-ng://remote-builder.internal`
         '';
       };
-      gitlab-url = lib.mkOption {
-        type = lib.types.str;
-        default = "";
-        example = "https://git.domain.com";
-        description = ''
-          Gitlab instance where the merge request comments with the test results will be posted on.
-        '';
-      };
-      gitlab-token-file = lib.mkOption {
-        type = lib.types.path;
-        default = "";
-        example = "/run/secrets/my-secret-gitlab-token";
-        description = ''
-          Gitlab token allowing to post merge request comments.
-        '';
-      };
-
       persistent-reports = lib.mkEnableOption "When restarting the service, resume the left over reports instead of doing a reset";
       simultaneous-builds = lib.mkOption {
         type = lib.types.int;
@@ -109,12 +90,31 @@
           How often a rebuild is done (on repeated reports) before taking the past test results at face value.
         '';
       };
+      gitlab = {
+        enable = lib.mkEnableOption "enable gitlab as publisher";
+        url = lib.mkOption {
+          type = lib.types.str;
+          default = "";
+          example = "https://git.domain.com";
+          description = ''
+            Gitlab instance where the merge request comments with the test results will be posted on.
+          '';
+        };
+        token = lib.mkOption {
+          type = lib.types.path;
+          default = "";
+          example = "/run/secrets/my-secret-gitlab-token";
+          description = ''
+            Gitlab token allowing to post merge request comments.
+          '';
+        };
+      };
     };
   };
-  config = lib.mkIf config.services.reproducibility-automation.enable {
-    systemd.services.reproducibility-automation = {
+  config = lib.mkIf config.services.linchpin.enable {
+    systemd.services.linchpin = {
       enable = true;
-      description = "server side for tracking already rebuilt derivations";
+      description = "server side to rebuild derivations and record results";
       path = [
         pkgs.nix
       ];
@@ -122,18 +122,22 @@
       serviceConfig = {
         Type = "exec";
         ExecStart = "${
-          pkgs.callPackage ./reproducibility-automation.nix { }
-        }/bin/reproducibility-automation --db-file ${config.services.reproducibility-automation.db-file} --socket-address ${config.services.reproducibility-automation.socket-ip}:${builtins.toString config.services.reproducibility-automation.port} --nix-store ${config.services.reproducibility-automation.nix-store} --gitlab-url ${config.services.reproducibility-automation.gitlab-url} --simultaneous-builds ${builtins.toString config.services.reproducibility-automation.simultaneous-builds} --gc-links-path ${config.services.reproducibility-automation.gc-links-path} ${lib.optionalString config.services.reproducibility-automation.persistent-reports "--persistent-reports"} --savefile-path ${config.services.reproducibility-automation.savefile-path} --savefile-history-path ${config.services.reproducibility-automation.savefile-history-path} --max-rebuild-tries ${builtins.toString config.services.reproducibility-automation.max-rebuild-tries}";
+          pkgs.callPackage ./packages/linchpin.nix { }
+        }/bin/linchpin --db-file ${config.services.linchpin.db-file} --socket-address ${config.services.linchpin.socket-ip}:${builtins.toString config.services.linchpin.port} --nix-store ${config.services.linchpin.nix-store} --simultaneous-builds ${builtins.toString config.services.linchpin.simultaneous-builds} --gc-links-dir ${config.services.linchpin.gc-links-dir} ${lib.optionalString config.services.linchpin.persistent-reports "--persistent-reports"} --savefile-path ${config.services.linchpin.savefile-path} --savefile-history-path ${config.services.linchpin.savefile-history-path} --max-rebuild-tries ${builtins.toString config.services.linchpin.max-rebuild-tries} ${
+          if config.services.linchpin.gitlab.enable then
+            "--gitlab-url ${config.services.linchpin.gitlab.url} --gitlab-api-token-file ${config.services.linchpin.gitlab.token}"
+          else
+            ""
+        }";
         WatchdogSec = "1min";
         Restart = "always";
         RestartSec = 20;
-        LoadCredential = [ "gitlab_token:${config.services.reproducibility-automation.gitlab-token-file}" ];
       };
       wantedBy = [ "multi-user.target" ];
     };
 
-    networking.firewall.allowedTCPPorts =
-      lib.mkIf config.services.reproducibility-automation.openFirewall
-        [ config.services.reproducibility-automation.port ];
+    networking.firewall.allowedTCPPorts = lib.mkIf config.services.linchpin.openFirewall [
+      config.services.linchpin.port
+    ];
   };
 }

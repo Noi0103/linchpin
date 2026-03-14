@@ -1,11 +1,12 @@
+use std::fs::create_dir_all;
 use std::path::PathBuf;
 use std::time;
 
+use log::debug;
+use log::trace;
 use rusqlite::Connection;
 
 use crate::nix_derivation;
-use crate::nix_derivation::Derivation;
-use crate::nix_derivation::DerivationState;
 
 #[derive(Clone, Debug)]
 pub struct Database {
@@ -13,10 +14,17 @@ pub struct Database {
 }
 
 impl Database {
+    pub fn new(db_path: PathBuf) -> Database {
+        Database { db_path }
+    }
     /// if it does not exist, create the database with
     /// - the main table itself
     /// - the trigger for a retries count and a last modified date
     pub fn initialize(&self) -> Result<(), rusqlite::Error> {
+        if !&self.db_path.parent().unwrap().exists() {
+            create_dir_all(self.db_path.parent().unwrap())
+                .expect("failed to create db_path parents");
+        };
         let conn = Connection::open(&self.db_path)?;
         conn.execute(
             "
@@ -45,10 +53,13 @@ impl Database {
         Ok(())
     }
 
+    /// get all entries that fit the store_derivation_path key
+    /// this should only be one but the return type for lookups is always vec
+    /// can return an empty vector
     pub fn lookup_store_derivation(
         &self,
         store_derivation_path: String,
-    ) -> Result<Vec<nix_derivation::Derivation>, rusqlite::Error> {
+    ) -> Result<Option<nix_derivation::Derivation>, rusqlite::Error> {
         let conn = Connection::open(&self.db_path)?;
         conn.busy_timeout(time::Duration::new(60, 0))
             .expect("failed to set sqlite busy timeout");
@@ -67,7 +78,15 @@ impl Database {
                 Ok(d)
             })?
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(result)
+
+        if result.is_empty() {
+            Ok(None)
+        } else if result.len() == 1 {
+            // SAFETY: checked above if
+            Ok(Some(result.first().unwrap().clone()))
+        } else {
+            panic!("db keys look corrupted");
+        }
     }
 
     /// inserted values: store_derivation TEXT PRIMARY KEY, store_derivation_state TEXT, error_reason TEXT,
@@ -75,6 +94,11 @@ impl Database {
         &self,
         entry: nix_derivation::Derivation,
     ) -> Result<(), rusqlite::Error> {
+        trace!(
+            "database upsert for {:?} with state {:?}",
+            entry.file_path,
+            entry.state
+        );
         let conn = rusqlite::Connection::open(&self.db_path)?;
         conn.busy_timeout(time::Duration::new(60, 0))
             .expect("failed to set sqlite busy timeout");
@@ -94,44 +118,10 @@ impl Database {
         )?;
         Ok(())
     }
-
-    /// database lookups for every derivation in the list
-    pub fn collect_report_results(
-        &self,
-        derivations_from_closure: Vec<nix_derivation::Derivation>,
-    ) -> Vec<nix_derivation::Derivation> {
-        // collect all new lookup entries and form report
-        let mut lookup_sum: Vec<nix_derivation::Derivation> = vec![];
-
-        for element in derivations_from_closure.clone() {
-            let lookup: Vec<nix_derivation::Derivation> = self
-                .lookup_store_derivation(element.file_path.to_str().unwrap().to_string())
-                .expect("sqlite lookup error");
-            match lookup.is_empty() {
-                true => {
-                    lookup_sum.push(Derivation {
-                        file_path: element.file_path.clone(),
-                        state: Some(DerivationState::NotTested),
-                        error_reason: element.error_reason.clone(),
-                        db_write_count: element.db_write_count,
-                        job_toplevel: element.job_toplevel.clone(),
-                    });
-                }
-                false => {
-                    // lookup always returns a vector even if only one entry is found
-                    for lookup_entry in lookup {
-                        lookup_sum.push(lookup_entry);
-                    }
-                }
-            }
-        }
-
-        lookup_sum
-    }
 }
 
 impl rusqlite::ToSql for nix_derivation::DerivationState {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput> {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         let value = self.to_string();
         Ok(rusqlite::types::ToSqlOutput::from(value))
     }
@@ -142,12 +132,12 @@ impl rusqlite::types::FromSql for nix_derivation::DerivationState {
         value: rusqlite::types::ValueRef<'_>,
     ) -> Result<Self, rusqlite::types::FromSqlError> {
         match value.as_str()? {
-            "Error" => Ok(nix_derivation::DerivationState::Error),
+            "Error" => Ok(nix_derivation::DerivationState::BuildError),
             "NotTested" => Ok(nix_derivation::DerivationState::NotTested),
             "Reproducible" => Ok(nix_derivation::DerivationState::Reproducible),
             "NonReproducible" => Ok(nix_derivation::DerivationState::NonReproducible),
             e => {
-                println!("invalid at nix_derivation::DerivationState FromSql {e:?}");
+                debug!("invalid at nix_derivation::DerivationState FromSql {e:?}");
                 Err(rusqlite::types::FromSqlError::InvalidType)
             }
         }
@@ -155,7 +145,7 @@ impl rusqlite::types::FromSql for nix_derivation::DerivationState {
 }
 
 impl rusqlite::ToSql for nix_derivation::BuildError {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput> {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         let value = self.to_string();
         Ok(rusqlite::types::ToSqlOutput::from(value))
     }
@@ -172,7 +162,7 @@ impl rusqlite::types::FromSql for nix_derivation::BuildError {
             "HashMismatch" => Ok(nix_derivation::BuildError::HashMismatch),
             "NonDeterministic" => Ok(nix_derivation::BuildError::NonDeterministic),
             e => {
-                println!("invalid at nix_derivation::BuildError FromSql {e:?}");
+                debug!("invalid at nix_derivation::BuildError FromSql {e:?}");
                 Err(rusqlite::types::FromSqlError::InvalidType)
             }
         }
@@ -182,14 +172,14 @@ impl rusqlite::types::FromSql for nix_derivation::BuildError {
 #[cfg(test)]
 mod tests {
     use crate::nix_derivation::BuildError;
+    use crate::nix_derivation::DerivationState;
 
-    use super::*;
     use rusqlite::types::{FromSql, ToSql, ToSqlOutput, ValueRef};
 
     #[test]
     fn conversion_derivation_state_sql_roundtrip() {
         let states = [
-            DerivationState::Error,
+            DerivationState::BuildError,
             DerivationState::NotTested,
             DerivationState::Reproducible,
             DerivationState::NonReproducible,

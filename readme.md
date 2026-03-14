@@ -1,5 +1,25 @@
 A service to rebuild every element of a Nix build closures sent to it and report the results as a GitLab merge request comment.
 
+Reproducibility for software builds is considered relevant for software security. Reproducible builds aim to reduce the chances a supply chain attack is successful. Such an attack only needs a single vulnerability.
+
+```nix
+"${linchpin.outPath}/nix/module.nix"
+{
+  services.linchpin = {
+    enable = false;
+    openFirewall = false;
+    socket-ip = "127.0.0.1";
+    port = 8080;
+    gitlab-url = "https://gitlab.noi0103.com";
+    gitlab-token-file = "/etc/gitlab_token";
+    max-rebuild-tries = 1;
+    persistent-reports = false;
+  };
+  environment.etc."gitlab_token".text = "empty-token";
+  environment.systemPackages = [ linchpin.packages."x86_64-linux".getclosure ];
+}
+```
+
 # Table of contents
 - [usage example configuration](#usage-example-configuration)
 - [REST endpoints](#rest-endpoints)
@@ -8,6 +28,7 @@ A service to rebuild every element of a Nix build closures sent to it and report
     - [example 1](#example-1)
     - [example 2](#example-2)
 - [tips and notes](#tips-and-notes)
+- [why linchpin](#why-linchpin)
 
 
 # usage example configuration
@@ -19,13 +40,13 @@ Singular machine setup example:
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
 
-    reproducibility-automation.url = "github:Noi0103/reproducibility-checker.git";
+    linchpin.url = "github:Noi0103/linchpin.git";
   };
 
   outputs = {
     self,
     nixpkgs,
-    reproducibility-automation,
+    linchpin,
     ...
   }@inputs:
   {
@@ -35,21 +56,17 @@ Singular machine setup example:
         modules = [
           ./configuration.nix
 
-          reproducibility-automation.nixosModules.reproducibility-automation
+          linchpin.nixosModules.default
           {
             environment.systemPackages =
-              [ inputs.reproducibility-automation.outputs.packages.x86_64-linux.getclosure ];
+              [ inputs.linchpin.outputs.packages.x86_64-linux.getclosure ];
 
-            services.reproducibility-automation = {
+            services.linchpin = {
               enable = true;
               openFirewall = false;
-              db-file = "/var/lib/reproducibility-automation/server.db";
+              db-file = "/var/lib/linchpin/server.db";
               socket-ip = "0.0.0.0";
               port = 8080;
-              gitlab-url = "https://git.domain.com";
-              gitlab-token-file = /path/to/token_file;
-              simultaneous-builds = 2;
-              persistent-reports = true;
             };
           }
         ];
@@ -58,8 +75,6 @@ Singular machine setup example:
   };
 }
 ```
-see ./module.nix for all available options
-
 
 # REST endpoints:
 ## /ping
@@ -67,25 +82,6 @@ see ./module.nix for all available options
 
 ## /report
 `/report` accept a multipart http request to test a full build closure
-1. __"json"__:
-```json
-{
-  "store_derivation": "<string>",
-  "store_derivation_closure": "<array of strings>",
-  "ci_merge_request_project_id": "$CI_MERGE_REQUEST_PROJECT_ID",
-  "ci_merge_request_iid": "$CI_MERGE_REQUEST_IID",
-  "ci_commit_sha": "$CI_COMMIT_SHA",
-  "ci_job_name": "$CI_JOB_NAME",
-  "ci_pipeline_id": "$CI_PIPELINE_ID"
-}
-```
-2. __"closure"__:
-
-binary stream created with `nix-store --export`
-
-## /metrics
-openmetrics/prometheus compatible metrics source
-
 
 # making a package build reproducible
 1. update your project fork to see most recent report (in case of upstream fixes for older reported derivations)

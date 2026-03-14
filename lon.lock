@@ -1,0 +1,25 @@
+{
+  "version": "1",
+  "sources": {
+    "nixpkgs": {
+      "type": "GitHub",
+      "fetchType": "tarball",
+      "owner": "nixos",
+      "repo": "nixpkgs",
+      "branch": "master",
+      "revision": "a5005924afc97014eeb62c4fb6992afc7f1549d6",
+      "url": "https://github.com/nixos/nixpkgs/archive/a5005924afc97014eeb62c4fb6992afc7f1549d6.tar.gz",
+      "hash": "sha256-MMLCq7cC+Jaz5akqwaoRo1xdQdADWa3RcOsGl30BFWg="
+    },
+    "pre-commit": {
+      "type": "Git",
+      "fetchType": "git",
+      "branch": "master",
+      "revision": "50b9238891e388c9fdc6a5c49e49c42533a1b5ce",
+      "url": "https://github.com/cachix/git-hooks.nix",
+      "hash": "sha256-QlcnByMc8KBjpU37rbq5iP7Cp97HvjRP0ucfdh+M4Qc=",
+      "lastModified": 1763988335,
+      "submodules": false
+    }
+  }
+}
