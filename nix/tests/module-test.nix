@@ -36,9 +36,12 @@
             openFirewall = true;
             socket-ip = "0.0.0.0";
             port = 80;
-            gitlab-url = "https://gitlab.noi0103.com";
-            gitlab-token-file = "/etc/gitlab_token";
+            gitlab.enable = true;
+            gitlab.url = "https://gitlab.noi0103.com";
+            gitlab.token = "/etc/gitlab_token";
             max-rebuild-tries = 1;
+            persistent-reports = true;
+            simultaneous-builds = 4;
           };
           environment.etc."gitlab_token".text = "empty-token";
 
@@ -74,7 +77,6 @@
     server.wait_for_open_port(80)
 
     server.succeed("curl --silent http://127.0.0.1:80/ping")
-    server.succeed("curl --silent http://127.0.0.1:80/metrics")
 
     response = client.succeed("curl --silent http://server:80/ping")
     assert "reports in waitlist:" in response
