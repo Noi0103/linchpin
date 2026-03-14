@@ -100,7 +100,7 @@
             Gitlab instance where the merge request comments with the test results will be posted on.
           '';
         };
-        token-path = lib.mkOption {
+        token = lib.mkOption {
           type = lib.types.path;
           default = "";
           example = "/run/secrets/my-secret-gitlab-token";
@@ -123,21 +123,12 @@
         Type = "exec";
         ExecStart = "${
           pkgs.callPackage ./packages/linchpin.nix { }
-        }/bin/linchpin --db-file ${config.services.linchpin.db-file} \
-          --socket-address ${config.services.linchpin.socket-ip}:${builtins.toString config.services.linchpin.port} \
-          --nix-store ${config.services.linchpin.nix-store} \
-          --simultaneous-builds ${builtins.toString config.services.linchpin.simultaneous-builds} \
-          --gc-links-dir ${config.services.linchpin.gc-links-dir} \
-          ${lib.optionalString config.services.linchpin.persistent-reports "--persistent-reports"} \
-          --savefile-path ${config.services.linchpin.savefile-path} \
-          --savefile-history-path ${config.services.linchpin.savefile-history-path} \
-          --max-rebuild-tries ${builtins.toString config.services.linchpin.max-rebuild-tries}\
-          ${
-                    if config.services.linchpin.gitlab.enable then
-                      "--gitlab-url ${config.services.linchpin.gitlab.url} --gitlab-api-token-file ${config.services.linchpin.gitlab.token-path}"
-                    else
-                      ""
-                  }";
+        }/bin/linchpin --db-file ${config.services.linchpin.db-file} --socket-address ${config.services.linchpin.socket-ip}:${builtins.toString config.services.linchpin.port} --nix-store ${config.services.linchpin.nix-store} --simultaneous-builds ${builtins.toString config.services.linchpin.simultaneous-builds} --gc-links-dir ${config.services.linchpin.gc-links-dir} ${lib.optionalString config.services.linchpin.persistent-reports "--persistent-reports"} --savefile-path ${config.services.linchpin.savefile-path} --savefile-history-path ${config.services.linchpin.savefile-history-path} --max-rebuild-tries ${builtins.toString config.services.linchpin.max-rebuild-tries} ${
+          if config.services.linchpin.gitlab.enable then
+            "--gitlab-url ${config.services.linchpin.gitlab.url} --gitlab-api-token-file ${config.services.linchpin.gitlab.token}"
+          else
+            ""
+        }";
         WatchdogSec = "1min";
         Restart = "always";
         RestartSec = 20;
