@@ -1,14 +1,7 @@
 A service to rebuild every element of a Nix build closures sent to it and report the results as a GitLab merge request comment.
 
-# TODO
-- [ ] use tokio notify instead of indirect lookups on an arc mutex object -> have the tokio tasks communicate directly
-- [ ] enable multiple conversions from report message object to report message (markdown, json, metrics, ...)
-- [ ] make a trait for a publisher of a report message (gitlab, github, html, ...)
-- [ ] see if cli calls can be replaced with more direct bindings
-- [ ] separate the opentelemetry stuff
+Reproducibility for software builds is considered relevant for software security. Reproducible builds aim to reduce the chances a supply chain attack is successful. Such an attack only needs a single vulnerability.
 
-integrate the new example from the flakeless nix version
-`module = []`
 ```nix
 "${linchpin.outPath}/nix/module.nix"
 {
@@ -24,12 +17,6 @@ integrate the new example from the flakeless nix version
   };
   environment.etc."gitlab_token".text = "empty-token";
   environment.systemPackages = [ linchpin.packages."x86_64-linux".getclosure ];
-
-  # WIP
-  nix.settings.post-build-hook = /etc/post-build-hook;
-  environment.etc."post-build-hook.sh".text = ''
-    ${nixpkgs.lib.getExe linchpin.packages."x86_64-linux".getclosure} 127.0.0.1:8080
-  '';
 }
 ```
 
@@ -80,10 +67,6 @@ Singular machine setup example:
               db-file = "/var/lib/linchpin/server.db";
               socket-ip = "0.0.0.0";
               port = 8080;
-              gitlab-url = "https://git.domain.com";
-              gitlab-token-file = /path/to/token_file;
-              simultaneous-builds = 2;
-              persistent-reports = true;
             };
           }
         ];
@@ -92,8 +75,6 @@ Singular machine setup example:
   };
 }
 ```
-see ./module.nix for all available options
-
 
 # REST endpoints:
 ## /ping
@@ -101,25 +82,9 @@ see ./module.nix for all available options
 
 ## /report
 `/report` accept a multipart http request to test a full build closure
-1. __"json"__:
-```json
-{
-  "store_derivation": "<string>",
-  "store_derivation_closure": "<array of strings>",
-  "ci_merge_request_project_id": "$CI_MERGE_REQUEST_PROJECT_ID",
-  "ci_merge_request_iid": "$CI_MERGE_REQUEST_IID",
-  "ci_commit_sha": "$CI_COMMIT_SHA",
-  "ci_job_name": "$CI_JOB_NAME",
-  "ci_pipeline_id": "$CI_PIPELINE_ID"
-}
-```
-2. __"closure"__:
-
-binary stream created with `nix-store --export`
 
 ## /metrics
 openmetrics/prometheus compatible metrics source
-
 
 # making a package build reproducible
 1. update your project fork to see most recent report (in case of upstream fixes for older reported derivations)
@@ -166,9 +131,3 @@ make it a colorful image
 ```sh
 nix-shell -p graphviz --run "nix-store --query --graph /nix/store/lri77scxpmyliswy8caq7si8ps8kxy1a-cargo-vendor-dir.drv > tmp.dot && dot -Tsvg tmp.dot -o out.svg && rm tmp.dot"
 ```
-
-# why linchpin
-from the cambridge dictionary (https://dictionary.cambridge.org/dictionary/english/linchpin):
-> the most important member of a group or part of a system, that holds together the other members or parts or makes it possible for them to operate as intended
-
-Reproducibility for software builds is an interest for software security. Reproducible builds aim to reduce the chances a supply chain attack is successful. Such an attack only needs a single vulnerability.
