@@ -56,7 +56,7 @@ Singular machine setup example:
         modules = [
           ./configuration.nix
 
-          linchpin.nixosModules.linchpin
+          linchpin.nixosModules.default
           {
             environment.systemPackages =
               [ inputs.linchpin.outputs.packages.x86_64-linux.getclosure ];
@@ -82,9 +82,6 @@ Singular machine setup example:
 
 ## /report
 `/report` accept a multipart http request to test a full build closure
-
-## /metrics
-openmetrics/prometheus compatible metrics source
 
 # making a package build reproducible
 1. update your project fork to see most recent report (in case of upstream fixes for older reported derivations)
