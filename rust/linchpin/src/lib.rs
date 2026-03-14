@@ -186,7 +186,7 @@ pub async fn rebuilder(
                 trace!("spawned new task");
                 let closure_element = match closure_element_clone {
                     ClosureElement::Derivation(derivation) => {
-                        trace!("looking at a derivation: {derivation}");
+                        info!("looking at a derivation: {derivation}");
                         // do stuff for every derivation
                         let tmp = match derivation.clone().state {
                             Some(DerivationState::Reproducible) => derivation,
@@ -199,7 +199,7 @@ pub async fn rebuilder(
                         ClosureElement::Derivation(tmp)
                     }
                     ClosureElement::Other(other) => {
-                        trace!("not a derivation: {other}");
+                        info!("not a derivation: {other}");
                         ClosureElement::Other(other)
                     }
                 };
