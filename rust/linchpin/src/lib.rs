@@ -181,12 +181,17 @@ pub async fn rebuilder(
             let database_clone = database.clone();
             let nix_store_clone = cli.nix_store.clone();
             let closure_element_clone = closure_element.clone();
+            let max_rebuild_tries = cli.max_rebuild_tries;
 
             let jh = task::spawn(async move {
                 trace!("spawned new task");
                 let closure_element = match closure_element_clone {
                     ClosureElement::Derivation(derivation) => {
                         info!("looking at a derivation: {derivation}");
+                        // skip if tested too often
+                        if derivation.db_write_count.unwrap_or_default() >= max_rebuild_tries {
+                            return ClosureElement::Derivation(derivation);
+                        }
                         // do stuff for every derivation
                         let tmp = match derivation.clone().state {
                             Some(DerivationState::Reproducible) => derivation,
