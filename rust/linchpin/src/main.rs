@@ -8,6 +8,8 @@ use tracing_subscriber::FmtSubscriber;
 
 use linchpin::cli::Cli;
 use linchpin::database::Database;
+use linchpin::initialize_linchpin;
+use linchpin::metric::Metrics;
 use linchpin::report_request_history::ReportRequestHistoryList;
 use linchpin::report_request_list::ReportRequestList;
 
@@ -15,8 +17,6 @@ use linchpin::report_request_list::ReportRequestList;
 #[cfg(target_has_atomic = "ptr")]
 #[tokio::main]
 async fn main() -> Result<()> {
-    use linchpin::initialize_linchpin;
-
     let cli = Cli::parse();
 
     let subscriber = FmtSubscriber::builder()
@@ -47,12 +47,15 @@ async fn main() -> Result<()> {
     )
     .expect("failed initialization");
 
+    let metrics = Arc::new(Mutex::new(Metrics::new(cli.otlp_url.clone())));
+
     // two tokio tasks share the main workload between webserver and actual building and rebuilding
 
     // accept new ReportRequests
     let task_server = tokio::task::spawn(linchpin::server::server(
         cli.clone(),
         shared_reports_list.clone(),
+        metrics.clone(),
     ));
 
     // rebuild and work through the ReportRequests
@@ -61,6 +64,7 @@ async fn main() -> Result<()> {
         shared_reports_list.clone(),
         shared_reports_history.clone(),
         database.clone(),
+        metrics,
     ));
 
     // bonus: systemd und sd_notify

@@ -13,10 +13,10 @@ use axum::{
     Router,
 };
 
-use crate::cli;
 use crate::cli::Cli;
 use crate::report_request::ReportRequest;
 use crate::report_request_list::ReportRequestList;
+use crate::{cli, Metrics};
 use log::debug;
 use log::info;
 
@@ -27,6 +27,7 @@ pub struct AppState {
     pub shared_reports_list: Arc<Mutex<ReportRequestList>>,
     /// all cli arguments
     pub cli: Cli,
+    pub shared_metrics: Arc<Mutex<Metrics>>,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -40,12 +41,17 @@ pub struct MethodLabels {
 }
 
 /// constructing the REST server application in the thread by adding sqlite database, socket address, a with rebuilder shared state and REST endpoints
-pub async fn server(cli: cli::Cli, shared_reports_list: Arc<Mutex<ReportRequestList>>) {
+pub async fn server(
+    cli: cli::Cli,
+    shared_reports_list: Arc<Mutex<ReportRequestList>>,
+    shared_metrics: Arc<Mutex<Metrics>>,
+) {
     let socket_addr: std::net::SocketAddr = cli.socket_address;
 
     let app_state = AppState {
         shared_reports_list: Arc::clone(&shared_reports_list),
         cli: cli.clone(),
+        shared_metrics: Arc::clone(&shared_metrics),
     };
 
     let app = Router::new()
@@ -61,7 +67,14 @@ pub async fn server(cli: cli::Cli, shared_reports_list: Arc<Mutex<ReportRequestL
 
 /// simple check how many items are in the shared_reports_list ("testing todo list")
 pub async fn handle_ping(State(app_state): State<AppState>) -> impl IntoResponse {
-    println!("/PING");
+    info!("/PING");
+    app_state
+        .shared_metrics
+        .lock()
+        .unwrap()
+        .http_ping_count
+        .add(1, &[]);
+
     match app_state.shared_reports_list.is_poisoned() {
         true => "poisoned waitlist".to_string(),
         false => format!(
@@ -85,6 +98,13 @@ pub async fn handle_report(
 
     let shared_reports_list = app_state.shared_reports_list;
     let cli = app_state.cli;
+
+    app_state
+        .shared_metrics
+        .lock()
+        .unwrap()
+        .http_report_count
+        .add(1, &[]);
 
     // receive all data
     let mut multipart_data: ReportRequestMultipart = ReportRequestMultipart {
@@ -166,6 +186,17 @@ pub async fn handle_report(
         Ok(_) => {}
         Err(_) => return "gc root could not be created",
     }
+
+    app_state
+        .shared_metrics
+        .lock()
+        .unwrap()
+        .get_report_count(&shared_reports_list.lock().unwrap());
+    app_state
+        .shared_metrics
+        .lock()
+        .unwrap()
+        .get_closure_element_count(&shared_reports_list.lock().unwrap());
 
     // respond with a success
     "report received"

@@ -42,6 +42,11 @@ impl ReportRequestList {
         }
     }
 
+    pub fn get_report_list_ref(&self) -> &VecDeque<ReportRequest> {
+        &self.report_requests
+    }
+
+    /// Take the front most report
     pub fn get_one_report(&self) -> Option<ReportRequest> {
         self.report_requests.front().cloned()
     }
