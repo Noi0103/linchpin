@@ -23,7 +23,7 @@ pub struct Cli {
     pub gitlab: Option<Gitlab>,
 
     /// opentelemetry pushing exporter to http endpoint of a metrics collector
-    #[arg(short, long, default_value_t = String::from("http://127.0.0.1/v1/metrics"))]
+    #[arg(short, long, default_value_t = String::from("http://127.0.0.1:4318/v1/metrics"))]
     pub otlp_url: String,
 
     /// used with `nix-build [paths] ... --store <...>`
