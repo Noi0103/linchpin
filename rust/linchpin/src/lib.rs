@@ -23,12 +23,14 @@ pub mod server;
 pub mod gitlab;
 
 pub mod cli;
+pub mod metric;
 pub mod report_request;
 pub mod report_request_history;
 pub mod report_request_list;
 
 use crate::cli::Cli;
 use crate::gitlab::Gitlab;
+use crate::metric::Metrics;
 use crate::nix_derivation::DerivationState;
 use crate::report_request::ClosureElement;
 use crate::report_request::Publisher;
@@ -96,6 +98,7 @@ pub async fn rebuilder(
     shared_reports_list: Arc<Mutex<ReportRequestList>>,
     history: Arc<Mutex<ReportRequestHistoryList>>,
     database: Database,
+    shared_metrics: Arc<Mutex<Metrics>>,
 ) {
     // TODO https://docs.rs/tokio/latest/tokio/sync/mpsc/
 
@@ -266,20 +269,24 @@ pub async fn rebuilder(
             }
         }
 
-        // move just finished report from (todo) list into history
-        {
-            history.lock().unwrap().add(report_request.clone().into());
-            history
-                .lock()
-                .unwrap()
-                .save(&cli.savefile_history_path)
-                .expect("saving history");
+        // move the just finished report request from (todo) list into history
+        let mut history = history.lock().unwrap();
+        history.add(report_request.clone().into());
+        history
+            .save(&cli.savefile_history_path)
+            .expect("saving history");
+        drop(history);
+        let mut list = shared_reports_list.lock().unwrap();
+        list.remove_one_report(report_request.clone());
+        list.save(&cli.savefile_path).expect("saving list");
+        drop(list);
+        info!("done with {}", report_request.store_derivation);
 
-            let mut list = shared_reports_list.lock().unwrap();
-            list.remove_one_report(report_request.clone());
-            list.save(&cli.savefile_path).expect("saving list");
-            info!("done with {}", report_request.store_derivation);
-        }
+        let mut shared_metrics = shared_metrics.lock().unwrap();
+        shared_metrics.get_report_count(&shared_reports_list.lock().unwrap());
+        shared_metrics.get_closure_element_count(&shared_reports_list.lock().unwrap());
+        drop(shared_metrics);
+
         report_request
             .store_derivation
             .delete_gc_root(&cli.gc_links_dir)
