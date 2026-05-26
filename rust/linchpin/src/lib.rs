@@ -198,10 +198,12 @@ pub async fn rebuilder(
                         // do stuff for every derivation
                         let tmp = match derivation.clone().state {
                             Some(DerivationState::Reproducible) => derivation,
-                            _ => derivation
-                                .build_rebuild_upsert(&database_clone, &nix_store_clone)
-                                .await
-                                .expect("build_rebuild_upsert failed"),
+                            _ => {
+                                let _ = derivation
+                                    .build_rebuild_upsert(&database_clone, &nix_store_clone)
+                                    .await;
+                                derivation
+                            }
                         };
                         trace!("done with derivation: {tmp}");
                         ClosureElement::Derivation(tmp)
