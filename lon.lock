@@ -7,18 +7,18 @@
       "owner": "nixos",
       "repo": "nixpkgs",
       "branch": "master",
-      "revision": "a5005924afc97014eeb62c4fb6992afc7f1549d6",
-      "url": "https://github.com/nixos/nixpkgs/archive/a5005924afc97014eeb62c4fb6992afc7f1549d6.tar.gz",
-      "hash": "sha256-MMLCq7cC+Jaz5akqwaoRo1xdQdADWa3RcOsGl30BFWg="
+      "revision": "79f626e44d9f8b95de5ff572b1c3de943f8bdca7",
+      "url": "https://github.com/nixos/nixpkgs/archive/79f626e44d9f8b95de5ff572b1c3de943f8bdca7.tar.gz",
+      "hash": "sha256-EvqCJppUOkXYJIUfcLFJmPkh9dLrMVeMWIAYCkVDaBs="
     },
     "pre-commit": {
       "type": "Git",
       "fetchType": "git",
       "branch": "master",
-      "revision": "50b9238891e388c9fdc6a5c49e49c42533a1b5ce",
+      "revision": "43b3c1ab9d40fb1dbb008f451988a91e375825e9",
       "url": "https://github.com/cachix/git-hooks.nix",
-      "hash": "sha256-QlcnByMc8KBjpU37rbq5iP7Cp97HvjRP0ucfdh+M4Qc=",
-      "lastModified": 1763988335,
+      "hash": "sha256-ReRHaLgr/uVqdD8afFSn+myXIfpHeOhP0yYe0TJqAA8=",
+      "lastModified": 1784288435,
       "submodules": false
     }
   }
